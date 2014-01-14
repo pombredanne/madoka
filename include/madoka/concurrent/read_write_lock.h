@@ -32,7 +32,7 @@ class ReadWriteLock {
 
 class ReadLock : public Lockable {
  public:
-  ReadLock(ReadWriteLock* lock) : lock_(lock) {}
+  explicit ReadLock(ReadWriteLock* lock) : lock_(lock) {}
 
   virtual void Lock() {
     lock_->AcquireReadLock();
@@ -50,7 +50,7 @@ class ReadLock : public Lockable {
 
 class WriteLock : public Lockable {
  public:
-  WriteLock(ReadWriteLock* lock) : lock_(lock) {}
+  explicit WriteLock(ReadWriteLock* lock) : lock_(lock) {}
 
   virtual void Lock() {
     lock_->AcquireWriteLock();
