@@ -12,7 +12,7 @@ namespace net {
 
 class ServerSocket : public AbstractSocket {
  public:
-  ServerSocket() : bound_(), address_length_(0) {
+  ServerSocket() : bound_() {
   }
 
   virtual ~ServerSocket() {
@@ -129,11 +129,11 @@ class ServerSocket : public AbstractSocket {
     if (!bound_)
       return NULL;
 
-    int length = address_length_;
-    sockaddr* address = static_cast<sockaddr*>(::malloc(length));
+    sockaddr_storage address;
+    int length = sizeof(address);
 
-    SOCKET peer = ::accept(descriptor_, address, &length);
-    ::free(address);
+    SOCKET peer = ::accept(descriptor_, reinterpret_cast<sockaddr*>(&address),
+                           &length);
 
     if (peer == INVALID_SOCKET)
       return NULL;
@@ -146,7 +146,6 @@ class ServerSocket : public AbstractSocket {
   }
 
  protected:
-  size_t address_length_;
   bool bound_;
 
  private:
@@ -155,8 +154,6 @@ class ServerSocket : public AbstractSocket {
       return false;
     if (!IsValid())
       return false;
-
-    address_length_ = length;
 
     bound_ = ::bind(descriptor_, address, static_cast<int>(length)) == 0;
     if (!bound_)
