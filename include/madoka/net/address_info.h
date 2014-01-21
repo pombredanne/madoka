@@ -32,6 +32,10 @@ class AddressInfoT : public InfoType {
       return current_;
     }
 
+    InfoType* operator->() const {
+      return current_;
+    }
+
    private:
     friend class AddressInfoT;
 
