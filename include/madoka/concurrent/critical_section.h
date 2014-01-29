@@ -9,6 +9,8 @@
 namespace madoka {
 namespace concurrent {
 
+struct MutexImpl;
+
 class CriticalSection : public Lockable {
  public:
   CriticalSection();
@@ -19,8 +21,6 @@ class CriticalSection : public Lockable {
   virtual void Unlock();
 
  private:
-  struct MutexImpl;
-
   MutexImpl* mutex_;
 
   DISALLOW_COPY_AND_ASSIGN(CriticalSection);

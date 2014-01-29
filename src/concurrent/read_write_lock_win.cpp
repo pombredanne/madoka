@@ -4,11 +4,10 @@
 
 #include <windows.h>
 
+#include "concurrent/internals.h"
+
 namespace madoka {
 namespace concurrent {
-
-struct ReadWriteLock::LockImpl : SRWLOCK {
-};
 
 ReadWriteLock::ReadWriteLock() : lock_(new LockImpl) {
   ::InitializeSRWLock(lock_);

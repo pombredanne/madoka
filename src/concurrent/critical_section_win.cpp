@@ -6,11 +6,10 @@
 
 #include <windows.h>
 
+#include "concurrent/internals.h"
+
 namespace madoka {
 namespace concurrent {
-
-struct CriticalSection::MutexImpl : CRITICAL_SECTION {
-};
 
 CriticalSection::CriticalSection() : mutex_(new MutexImpl) {
   ::InitializeCriticalSection(mutex_);

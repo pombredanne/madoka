@@ -9,6 +9,8 @@
 namespace madoka {
 namespace concurrent {
 
+struct LockImpl;
+
 class ReadWriteLock {
  public:
   ReadWriteLock();
@@ -23,8 +25,6 @@ class ReadWriteLock {
   void ReleaseWriteLock();
 
  private:
-  struct LockImpl;
-
   LockImpl* lock_;
 
   DISALLOW_COPY_AND_ASSIGN(ReadWriteLock);

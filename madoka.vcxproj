@@ -31,6 +31,7 @@
     <ClInclude Include="include\madoka\net\server_socket.h" />
     <ClInclude Include="include\madoka\net\socket.h" />
     <ClInclude Include="include\madoka\net\winsock.h" />
+    <ClInclude Include="src\concurrent\internals.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\concurrent\critical_section_win.cpp" />

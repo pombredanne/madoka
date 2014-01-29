@@ -4,12 +4,10 @@
 
 #include <pthread.h>
 
+#include "concurrent/internals.h"
+
 namespace madoka {
 namespace concurrent {
-
-struct ReadWriteLock::LockImpl {
-  pthread_rwlock_t lock;
-};
 
 ReadWriteLock::ReadWriteLock() : lock_(new LockImpl) {
   lock_->lock = PTHREAD_RWLOCK_INITIALIZER;

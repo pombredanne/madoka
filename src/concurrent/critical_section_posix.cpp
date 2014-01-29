@@ -4,12 +4,10 @@
 
 #include <pthread.h>
 
+#include "concurrent/internals.h"
+
 namespace madoka {
 namespace concurrent {
-
-struct CriticalSection::MutexImpl {
-  pthread_mutex_t mutex;
-};
 
 CriticalSection::CriticalSection() : mutex_(new MutexImpl) {
   mutex_->mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
