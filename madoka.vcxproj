@@ -20,6 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\madoka\common.h" />
+    <ClInclude Include="include\madoka\concurrent\condition_variable.h" />
     <ClInclude Include="include\madoka\concurrent\critical_section.h" />
     <ClInclude Include="include\madoka\concurrent\lockable.h" />
     <ClInclude Include="include\madoka\concurrent\lock_guard.h" />
@@ -34,6 +35,7 @@
     <ClInclude Include="src\concurrent\internals.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\concurrent\condition_variable_win.cpp" />
     <ClCompile Include="src\concurrent\critical_section_win.cpp" />
     <ClCompile Include="src\concurrent\read_write_lock_win.cpp" />
   </ItemGroup>

@@ -21,6 +21,8 @@ class CriticalSection : public Lockable {
   virtual void Unlock();
 
  private:
+  friend class ConditionVariable;
+
   MutexImpl* mutex_;
 
   DISALLOW_COPY_AND_ASSIGN(CriticalSection);

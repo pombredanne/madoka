@@ -14,6 +14,9 @@ struct MutexImpl : CRITICAL_SECTION {
 struct LockImpl : SRWLOCK {
 };
 
+struct VariableImpl : CONDITION_VARIABLE {
+};
+
 #else   // _WIN32
 
 struct MutexImpl {
@@ -22,6 +25,10 @@ struct MutexImpl {
 
 struct LockImpl {
   pthread_rwlock_t lock;
+};
+
+struct VariableImpl {
+  pthread_cond_t cond;
 };
 
 #endif  // _WIN32
