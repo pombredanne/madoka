@@ -6,7 +6,7 @@
 #include <stdio.h>
 
 #include <madoka/net/abstract_socket.h>
-#include <madoka/net/address_info.h>
+#include <madoka/net/resolver.h>
 
 namespace madoka {
 namespace net {
@@ -40,12 +40,12 @@ class Socket : public AbstractSocket {
     if (connected_)
       return false;
 
-    AddressInfo info;
-    info.ai_socktype = SOCK_STREAM;
-    if (!info.Resolve(node_name, service))
+    Resolver resolver;
+    resolver.SetType(SOCK_STREAM);
+    if (!resolver.Resolve(node_name, service))
       return false;
 
-    for (AddressInfo::iterator i = info.begin(), l = info.end(); i != l; ++i) {
+    for (auto i = resolver.begin(), l = resolver.end(); i != l; ++i) {
       if (Connect(*i))
         break;
 
@@ -86,12 +86,12 @@ class Socket : public AbstractSocket {
     if (connected_)
       return false;
 
-    AddressInfoW info;
-    info.ai_socktype = SOCK_STREAM;
-    if (!info.Resolve(node_name, service))
+    ResolverW resolver;
+    resolver.SetType(SOCK_STREAM);
+    if (!resolver.Resolve(node_name, service))
       return false;
 
-    for (AddressInfoW::iterator i = info.begin(), l = info.end(); i != l; ++i) {
+    for (auto i = resolver.begin(), l = resolver.end(); i != l; ++i) {
       if (Connect(*i))
         break;
 

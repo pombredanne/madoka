@@ -6,7 +6,7 @@
 #include <stdio.h>
 
 #include <madoka/net/abstract_socket.h>
-#include <madoka/net/address_info.h>
+#include <madoka/net/resolver.h>
 
 namespace madoka {
 namespace net {
@@ -53,13 +53,13 @@ class DatagramSocket : public AbstractSocket {
     if (bound_)
       return false;
 
-    AddressInfo info;
-    info.ai_flags = AI_PASSIVE;
-    info.ai_socktype = SOCK_DGRAM;
-    if (!info.Resolve(node_name, service))
+    Resolver resolver;
+    resolver.SetFlags(AI_PASSIVE);
+    resolver.SetType(SOCK_DGRAM);
+    if (!resolver.Resolve(node_name, service))
       return false;
 
-    for (AddressInfo::iterator i = info.begin(), l = info.end(); i != l; ++i) {
+    for (auto i = resolver.begin(), l = resolver.end(); i != l; ++i) {
       if (Bind(*i))
         break;
 
@@ -106,12 +106,12 @@ class DatagramSocket : public AbstractSocket {
     if (connected_)
       return false;
 
-    AddressInfo info;
-    info.ai_socktype = SOCK_DGRAM;
-    if (!info.Resolve(node_name, service))
+    Resolver resolver;
+    resolver.SetType(SOCK_DGRAM);
+    if (!resolver.Resolve(node_name, service))
       return false;
 
-    for (AddressInfo::iterator i = info.begin(), l = info.end(); i != l; ++i) {
+    for (auto i = resolver.begin(), l = resolver.end(); i != l; ++i) {
       if (Connect(*i))
         break;
 
@@ -149,13 +149,13 @@ class DatagramSocket : public AbstractSocket {
     if (bound_)
       return false;
 
-    AddressInfoW info;
-    info.ai_flags = AI_PASSIVE;
-    info.ai_socktype = SOCK_DGRAM;
-    if (!info.Resolve(node_name, service))
+    ResolverW resolver;
+    resolver.SetFlags(AI_PASSIVE);
+    resolver.SetType(SOCK_DGRAM);
+    if (!resolver.Resolve(node_name, service))
       return false;
 
-    for (AddressInfoW::iterator i = info.begin(), l = info.end(); i != l; ++i) {
+    for (auto i = resolver.begin(), l = resolver.end(); i != l; ++i) {
       if (Bind(*i))
         break;
 
@@ -192,12 +192,12 @@ class DatagramSocket : public AbstractSocket {
     if (bound_ || connected_)
       return false;
 
-    AddressInfoW info;
-    info.ai_socktype = SOCK_DGRAM;
-    if (!info.Resolve(node_name, service))
+    ResolverW resolver;
+    resolver.SetType(SOCK_DGRAM);
+    if (!resolver.Resolve(node_name, service))
       return false;
 
-    for (AddressInfoW::iterator i = info.begin(), l = info.end(); i != l; ++i) {
+    for (auto i = resolver.begin(), l = resolver.end(); i != l; ++i) {
       if (Connect(*i))
         break;
 
