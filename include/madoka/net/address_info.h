@@ -68,7 +68,8 @@ class AddressInfoT : public InfoType {
   DISALLOW_COPY_AND_ASSIGN(AddressInfoT);
 };
 
-class AddressInfo : public AddressInfoT<addrinfo> {
+// DEPRECATED(dacci): Use madoka::net::Resolver instead.
+class MADOKA_DEPRECATED AddressInfo : public AddressInfoT<addrinfo> {
  public:
   AddressInfo() {
   }
@@ -119,7 +120,8 @@ class AddressInfo : public AddressInfoT<addrinfo> {
 #if defined WIN32 && \
     ((NTDDI_VERSION >= NTDDI_WINXPSP2) || (_WIN32_WINNT >= 0x0502))
 
-class AddressInfoW : public AddressInfoT<ADDRINFOW> {
+// DEPRECATED(dacci): Use madoka::net::ResolverW instead.
+class MADOKA_DEPRECATED AddressInfoW : public AddressInfoT<ADDRINFOW> {
  public:
   AddressInfoW() {
   }

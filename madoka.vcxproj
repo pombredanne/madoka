@@ -29,6 +29,7 @@
     <ClInclude Include="include\madoka\net\address_info.h" />
     <ClInclude Include="include\madoka\net\common.h" />
     <ClInclude Include="include\madoka\net\datagram_socket.h" />
+    <ClInclude Include="include\madoka\net\resolver.h" />
     <ClInclude Include="include\madoka\net\server_socket.h" />
     <ClInclude Include="include\madoka\net\socket.h" />
     <ClInclude Include="include\madoka\net\winsock.h" />
