@@ -5,7 +5,7 @@
 
 #include <madoka/common.h>
 
-#ifdef WIN32
+#ifdef _WIN32
   #include <ws2tcpip.h>
   #include <mswsock.h>
 
@@ -17,7 +17,7 @@
   #define SHUT_RD   SD_RECEIVE
   #define SHUT_WR   SD_SEND
   #define SHUT_RDWR SD_BOTH
-#else   // WIN32
+#else   // _WIN32
   #include <errno.h>
   #include <unistd.h>
   #include <sys/ioctl.h>
@@ -37,6 +37,6 @@
 
   #define closesocket close
   #define ioctlsocket ioctl
-#endif  // WIN32
+#endif  // _WIN32
 
 #endif  // MADOKA_NET_COMMON_H_

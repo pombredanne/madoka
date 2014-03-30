@@ -135,7 +135,9 @@ class DatagramSocket : public AbstractSocket {
     return Connect(node_name, service);
   }
 
-#ifdef WIN32
+#ifdef _WIN32
+#if (NTDDI_VERSION >= NTDDI_WINXPSP2) || (_WIN32_WINNT >= 0x0502)
+
   bool Bind(const ADDRINFOW* end_point) {
     if (end_point->ai_socktype != SOCK_DGRAM)
       return false;
@@ -220,7 +222,9 @@ class DatagramSocket : public AbstractSocket {
 
     return Connect(node_name, service);
   }
-#endif  // WIN32
+
+#endif  // (NTDDI_VERSION >= NTDDI_WINXPSP2) || (_WIN32_WINNT >= 0x0502)
+#endif  // _WIN32
 
   virtual int Receive(void* buffer, int length, int flags) {
     if (!IsValid() || !(bound_ || connected_) || buffer == NULL || length < 0)

@@ -98,12 +98,12 @@ class AbstractSocket {
                   end_point->ai_protocol);
   }
 
-#ifdef WIN32
+#ifdef _WIN32
   bool Create(const ADDRINFOW* end_point) {
     return Create(end_point->ai_family, end_point->ai_socktype,
                   end_point->ai_protocol);
   }
-#endif  // WIN32
+#endif  // _WIN32
 
   SOCKET descriptor_;
 

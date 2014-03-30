@@ -117,8 +117,8 @@ class MADOKA_DEPRECATED AddressInfo : public AddressInfoT<addrinfo> {
   DISALLOW_COPY_AND_ASSIGN(AddressInfo);
 };
 
-#if defined WIN32 && \
-    ((NTDDI_VERSION >= NTDDI_WINXPSP2) || (_WIN32_WINNT >= 0x0502))
+#ifdef _WIN32
+#if ((NTDDI_VERSION >= NTDDI_WINXPSP2) || (_WIN32_WINNT >= 0x0502))
 
 // DEPRECATED(dacci): Use madoka::net::ResolverW instead.
 class MADOKA_DEPRECATED AddressInfoW : public AddressInfoT<ADDRINFOW> {
@@ -169,8 +169,8 @@ class MADOKA_DEPRECATED AddressInfoW : public AddressInfoT<ADDRINFOW> {
   DISALLOW_COPY_AND_ASSIGN(AddressInfoW);
 };
 
-#endif  // defined WIN32 &&
-        // ((NTDDI_VERSION >= NTDDI_WINXPSP2) || (_WIN32_WINNT >= 0x0502))
+#endif  // ((NTDDI_VERSION >= NTDDI_WINXPSP2) || (_WIN32_WINNT >= 0x0502))
+#endif  // _WIN32
 
 }  // namespace net
 }  // namespace madoka

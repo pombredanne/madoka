@@ -128,9 +128,9 @@ class Resolver : public ResolverBase<addrinfo, char> {
     Free();
 
     if (port < 0 || 65535 < port) {
-#ifdef WIN32
+#ifdef _WIN32
       error_ = WSAEINVAL;
-#else  // WIN32
+#else  // _WIN32
       error_ = EAI_SYSTEM;
       errno = EINVAL;
 #endif
@@ -156,7 +156,7 @@ class Resolver : public ResolverBase<addrinfo, char> {
   }
 };
 
-#ifdef WIN32
+#ifdef _WIN32
 #if (NTDDI_VERSION >= NTDDI_WINXPSP2) || (_WIN32_WINNT >= 0x0502)
 
 class ResolverW : public ResolverBase<ADDRINFOW, wchar_t> {
@@ -175,9 +175,9 @@ class ResolverW : public ResolverBase<ADDRINFOW, wchar_t> {
     Free();
 
     if (port < 0 || 65535 < port) {
-#ifdef WIN32
+#ifdef _WIN32
       error_ = WSAEINVAL;
-#else  // WIN32
+#else  // _WIN32
       error_ = EAI_SYSTEM;
       errno = EINVAL;
 #endif
@@ -210,7 +210,7 @@ typedef Resolver ResolverT;
 #endif  // UNICODE
 
 #endif  // (NTDDI_VERSION >= NTDDI_WINXPSP2) || (_WIN32_WINNT >= 0x0502)
-#endif  // WIN32
+#endif  // _WIN32
 
 }  // namespace net
 }  // namespace madoka

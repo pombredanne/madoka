@@ -69,8 +69,9 @@ class Socket : public AbstractSocket {
     return Connect(node_name, service);
   }
 
-#if defined WIN32 && \
-    ((NTDDI_VERSION >= NTDDI_WINXPSP2) || (_WIN32_WINNT >= 0x0502))
+#ifdef _WIN32
+#if ((NTDDI_VERSION >= NTDDI_WINXPSP2) || (_WIN32_WINNT >= 0x0502))
+
   bool Connect(const ADDRINFOW* end_point) {
     if (connected_)
       return false;
@@ -114,8 +115,9 @@ class Socket : public AbstractSocket {
 
     return Connect(node_name, service);
   }
-#endif  // defined WIN32 &&
-        // ((NTDDI_VERSION >= NTDDI_WINXPSP2) || (_WIN32_WINNT >= 0x0502))
+
+#endif  // ((NTDDI_VERSION >= NTDDI_WINXPSP2) || (_WIN32_WINNT >= 0x0502))
+#endif  // _WIN32
 
   bool Shutdown(int how) {
     if (!IsValid())
