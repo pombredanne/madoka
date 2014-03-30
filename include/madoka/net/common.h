@@ -18,6 +18,7 @@
   #define SHUT_WR   SD_SEND
   #define SHUT_RDWR SD_BOTH
 #else   // WIN32
+  #include <errno.h>
   #include <unistd.h>
   #include <sys/ioctl.h>
   #include <sys/types.h>

@@ -175,7 +175,12 @@ class ResolverW : public ResolverBase<ADDRINFOW, wchar_t> {
     Free();
 
     if (port < 0 || 65535 < port) {
+#ifdef WIN32
       error_ = WSAEINVAL;
+#else  // WIN32
+      error_ = EAI_SYSTEM;
+      errno = EINVAL;
+#endif
       return false;
     }
 
