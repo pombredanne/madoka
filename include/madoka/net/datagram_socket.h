@@ -6,7 +6,6 @@
 #include <stdio.h>
 
 #include <madoka/net/abstract_socket.h>
-#include <madoka/net/resolver.h>
 
 namespace madoka {
 namespace net {
@@ -49,40 +48,6 @@ class DatagramSocket : public AbstractSocket {
     return Bind(end_point->ai_addr, end_point->ai_addrlen);
   }
 
-  virtual bool Bind(const char* node_name, const char* service) {
-    if (bound_)
-      return false;
-
-    Resolver resolver;
-    resolver.SetFlags(AI_PASSIVE);
-    resolver.SetType(SOCK_DGRAM);
-    if (!resolver.Resolve(node_name, service))
-      return false;
-
-    for (auto i = resolver.begin(), l = resolver.end(); i != l; ++i) {
-      if (Bind(*i))
-        break;
-
-      Close();
-    }
-
-    return bound_;
-  }
-
-  virtual bool Bind(const char* node_name, int port) {
-    if (!IsValidPort(port))
-      return false;
-
-    char service[8];
-#ifdef _MSC_VER
-    ::sprintf_s(service, "%d", port);
-#else
-    ::snprintf(service, sizeof(service), "%d", port);
-#endif  // _MSC_VER
-
-    return Bind(node_name, service);
-  }
-
   bool Connect(const sockaddr* address, size_t length) {
     if (connected_)
       return false;
@@ -102,39 +67,6 @@ class DatagramSocket : public AbstractSocket {
     return Connect(end_point->ai_addr, end_point->ai_addrlen);
   }
 
-  virtual bool Connect(const char* node_name, const char* service) {
-    if (connected_)
-      return false;
-
-    Resolver resolver;
-    resolver.SetType(SOCK_DGRAM);
-    if (!resolver.Resolve(node_name, service))
-      return false;
-
-    for (auto i = resolver.begin(), l = resolver.end(); i != l; ++i) {
-      if (Connect(*i))
-        break;
-
-      Close();
-    }
-
-    return connected_;
-  }
-
-  virtual bool Connect(const char* node_name, int port) {
-    if (!IsValidPort(port))
-      return false;
-
-    char service[8];
-#ifdef _MSC_VER
-    ::sprintf_s(service, "%d", port);
-#else
-    ::snprintf(service, sizeof(service), "%d", port);
-#endif  // _MSC_VER
-
-    return Connect(node_name, service);
-  }
-
 #ifdef _WIN32
 #if (NTDDI_VERSION >= NTDDI_WINXPSP2) || (_WIN32_WINNT >= 0x0502)
 
@@ -147,40 +79,6 @@ class DatagramSocket : public AbstractSocket {
     return Bind(end_point->ai_addr, end_point->ai_addrlen);
   }
 
-  virtual bool Bind(const wchar_t* node_name, const wchar_t* service) {
-    if (bound_)
-      return false;
-
-    ResolverW resolver;
-    resolver.SetFlags(AI_PASSIVE);
-    resolver.SetType(SOCK_DGRAM);
-    if (!resolver.Resolve(node_name, service))
-      return false;
-
-    for (auto i = resolver.begin(), l = resolver.end(); i != l; ++i) {
-      if (Bind(*i))
-        break;
-
-      Close();
-    }
-
-    return bound_;
-  }
-
-  virtual bool Bind(const wchar_t* node_name, int port) {
-    if (!IsValidPort(port))
-      return false;
-
-    wchar_t service[8];
-#ifdef _MSC_VER
-    ::swprintf_s(service, L"%d", port);
-#else
-    ::swprintf(service, _countof(service), L"%d", port);
-#endif  // _MSC_VER
-
-    return Bind(node_name, service);
-  }
-
   bool Connect(const ADDRINFOW* end_point) {
     if (end_point->ai_socktype != SOCK_DGRAM)
       return false;
@@ -188,39 +86,6 @@ class DatagramSocket : public AbstractSocket {
       return false;
 
     return Connect(end_point->ai_addr, end_point->ai_addrlen);
-  }
-
-  virtual bool Connect(const wchar_t* node_name, const wchar_t* service) {
-    if (bound_ || connected_)
-      return false;
-
-    ResolverW resolver;
-    resolver.SetType(SOCK_DGRAM);
-    if (!resolver.Resolve(node_name, service))
-      return false;
-
-    for (auto i = resolver.begin(), l = resolver.end(); i != l; ++i) {
-      if (Connect(*i))
-        break;
-
-      Close();
-    }
-
-    return connected_;
-  }
-
-  virtual bool Connect(const wchar_t* node_name, int port) {
-    if (!IsValidPort(port))
-      return false;
-
-    wchar_t service[8];
-#ifdef _MSC_VER
-    ::swprintf_s(service, L"%d", port);
-#else
-    ::swprintf(service, _countof(service), L"%d", port);
-#endif  // _MSC_VER
-
-    return Connect(node_name, service);
   }
 
 #endif  // (NTDDI_VERSION >= NTDDI_WINXPSP2) || (_WIN32_WINNT >= 0x0502)

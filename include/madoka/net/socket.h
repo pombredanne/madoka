@@ -6,7 +6,6 @@
 #include <stdio.h>
 
 #include <madoka/net/abstract_socket.h>
-#include <madoka/net/resolver.h>
 
 namespace madoka {
 namespace net {
@@ -36,39 +35,6 @@ class Socket : public AbstractSocket {
     return Connect(end_point->ai_addr, end_point->ai_addrlen);
   }
 
-  bool Connect(const char* node_name, const char* service) {
-    if (connected_)
-      return false;
-
-    Resolver resolver;
-    resolver.SetType(SOCK_STREAM);
-    if (!resolver.Resolve(node_name, service))
-      return false;
-
-    for (auto i = resolver.begin(), l = resolver.end(); i != l; ++i) {
-      if (Connect(*i))
-        break;
-
-      Close();
-    }
-
-    return connected_;
-  }
-
-  bool Connect(const char* node_name, int port) {
-    if (!IsValidPort(port))
-      return false;
-
-    char service[8];
-#ifdef _MSC_VER
-    ::sprintf_s(service, "%d", port);
-#else
-    ::snprintf(service, sizeof(service), "%d", port);
-#endif  // _MSC_VER
-
-    return Connect(node_name, service);
-  }
-
 #ifdef _WIN32
 #if ((NTDDI_VERSION >= NTDDI_WINXPSP2) || (_WIN32_WINNT >= 0x0502))
 
@@ -81,39 +47,6 @@ class Socket : public AbstractSocket {
       return false;
 
     return Connect(end_point->ai_addr, end_point->ai_addrlen);
-  }
-
-  bool Connect(const wchar_t* node_name, const wchar_t* service) {
-    if (connected_)
-      return false;
-
-    ResolverW resolver;
-    resolver.SetType(SOCK_STREAM);
-    if (!resolver.Resolve(node_name, service))
-      return false;
-
-    for (auto i = resolver.begin(), l = resolver.end(); i != l; ++i) {
-      if (Connect(*i))
-        break;
-
-      Close();
-    }
-
-    return connected_;
-  }
-
-  bool Connect(const wchar_t* node_name, int port) {
-    if (!IsValidPort(port))
-      return false;
-
-    wchar_t service[8];
-#ifdef _MSC_VER
-    ::swprintf_s(service, L"%d", port);
-#else
-    ::swprintf(service, _countof(service), L"%d", port);
-#endif  // _MSC_VER
-
-    return Connect(node_name, service);
   }
 
 #endif  // ((NTDDI_VERSION >= NTDDI_WINXPSP2) || (_WIN32_WINNT >= 0x0502))
