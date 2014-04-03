@@ -272,10 +272,18 @@ class DatagramSocket : public AbstractSocket {
   }
 
  protected:
+  bool set_bound(bool bound) {
+    bound_ = bound;
+  }
+
+  bool set_connected(bool connected) {
+    connected_ = connected;
+  }
+
+ private:
   bool bound_;
   bool connected_;
 
- private:
   DISALLOW_COPY_AND_ASSIGN(DatagramSocket);
 };
 

@@ -147,9 +147,6 @@ class ServerSocket : public AbstractSocket {
     return bound_;
   }
 
- protected:
-  bool bound_;
-
  private:
   bool Bind(const sockaddr* address, size_t length) {
     if (bound_)
@@ -163,6 +160,8 @@ class ServerSocket : public AbstractSocket {
 
     return bound_;
   }
+
+  bool bound_;
 
   DISALLOW_COPY_AND_ASSIGN(ServerSocket);
 };

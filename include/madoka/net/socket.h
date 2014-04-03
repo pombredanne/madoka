@@ -161,7 +161,9 @@ class Socket : public AbstractSocket {
   }
 
  protected:
-  bool connected_;
+   void set_connected(bool connected) {
+     connected_ = connected;
+   }
 
  private:
   friend class ServerSocket;
@@ -182,6 +184,8 @@ class Socket : public AbstractSocket {
 
     return connected_;
   }
+
+  bool connected_;
 
   DISALLOW_COPY_AND_ASSIGN(Socket);
 };
