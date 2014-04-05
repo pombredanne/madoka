@@ -27,11 +27,15 @@
     <ClInclude Include="include\madoka\concurrent\read_write_lock.h" />
     <ClInclude Include="include\madoka\net\abstract_socket.h" />
     <ClInclude Include="include\madoka\net\address_info.h" />
+    <ClInclude Include="include\madoka\net\async_datagram_socket.h" />
+    <ClInclude Include="include\madoka\net\async_server_socket.h" />
+    <ClInclude Include="include\madoka\net\async_socket.h" />
     <ClInclude Include="include\madoka\net\common.h" />
     <ClInclude Include="include\madoka\net\datagram_socket.h" />
     <ClInclude Include="include\madoka\net\resolver.h" />
     <ClInclude Include="include\madoka\net\server_socket.h" />
     <ClInclude Include="include\madoka\net\socket.h" />
+    <ClInclude Include="include\madoka\net\socket_event_listener.h" />
     <ClInclude Include="include\madoka\net\winsock.h" />
     <ClInclude Include="src\concurrent\internals.h" />
   </ItemGroup>
@@ -39,6 +43,9 @@
     <ClCompile Include="src\concurrent\condition_variable_win.cpp" />
     <ClCompile Include="src\concurrent\critical_section_win.cpp" />
     <ClCompile Include="src\concurrent\read_write_lock_win.cpp" />
+    <ClCompile Include="src\net\async_datagram_socket_win.cpp" />
+    <ClCompile Include="src\net\async_server_socket_win.cpp" />
+    <ClCompile Include="src\net\async_socket_win.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{849CC6CC-460E-45DE-8EA5-4DDA0F25837D}</ProjectGuid>
@@ -108,6 +115,8 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
+      <DisableSpecificWarnings>4244;4267</DisableSpecificWarnings>
+      <TreatWarningAsError>true</TreatWarningAsError>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -122,6 +131,8 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
+      <DisableSpecificWarnings>4244;4267</DisableSpecificWarnings>
+      <TreatWarningAsError>true</TreatWarningAsError>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -138,6 +149,8 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
+      <DisableSpecificWarnings>4244;4267</DisableSpecificWarnings>
+      <TreatWarningAsError>true</TreatWarningAsError>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -156,6 +169,8 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
+      <DisableSpecificWarnings>4244;4267</DisableSpecificWarnings>
+      <TreatWarningAsError>true</TreatWarningAsError>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>

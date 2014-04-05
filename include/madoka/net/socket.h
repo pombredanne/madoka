@@ -94,9 +94,9 @@ class Socket : public AbstractSocket {
   }
 
  protected:
-   void set_connected(bool connected) {
-     connected_ = connected;
-   }
+  void set_connected(bool connected) {
+    connected_ = connected;
+  }
 
  private:
   friend class ServerSocket;
