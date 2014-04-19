@@ -274,41 +274,36 @@ void AsyncDatagramSocket::OnRequested(AsyncContext* context) {
   int result = 0;
   int error = ERROR_SUCCESS;
 
+  ::StartThreadpoolIo(io_);
+
   switch (context->action) {
     case Receiving:
-      ::StartThreadpoolIo(io_);
       result = ::WSARecv(descriptor_, context, 1, &bytes, &context->flags,
                          context, NULL);
-      error = ::WSAGetLastError();
       break;
 
     case Sending:
-      ::StartThreadpoolIo(io_);
       result = ::WSASend(descriptor_, context, 1, &bytes, context->flags,
                          context, NULL);
-      error = ::WSAGetLastError();
       break;
 
     case ReceivingFrom:
-      ::StartThreadpoolIo(io_);
       result = ::WSARecvFrom(descriptor_, context, 1, &bytes, &context->flags,
                              reinterpret_cast<sockaddr*>(&context->address),
                              &context->address_length, context, NULL);
-      error = ::WSAGetLastError();
       break;
 
     case SendingTo:
-      ::StartThreadpoolIo(io_);
       result = ::WSASendTo(descriptor_, context, 1, &bytes, context->flags,
                            reinterpret_cast<sockaddr*>(&context->address),
                            context->address_length, context, NULL);
-      error = ::WSAGetLastError();
       break;
 
     default:
       assert(false);
   }
 
+  error = ::WSAGetLastError();
   if (result != 0 && error != WSA_IO_PENDING) {
     ::CancelThreadpoolIo(io_);
     OnCompleted(context, error, 0);
