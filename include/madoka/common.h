@@ -11,6 +11,10 @@
   void operator=(const TypeName&)
 #endif  // DISALLOW_COPY_AND_ASSIGN
 
+#ifdef _MSC_VER
+#include <yvals.h>
+#endif  // _MSC_VER
+
 #ifndef MADOKA_DEPRECATED
   #if defined(_MSC_VER)
     #define MADOKA_DEPRECATED __declspec(deprecated)
@@ -20,5 +24,19 @@
     #define MADOKA_DEPRECATED
   #endif
 #endif  // MADOKA_DEPRECATED
+
+#ifndef MADOKA_OVERRIDE
+  #if __cplusplus >= 201103L
+    #define MADOKA_OVERRIDE override
+  #elif defined(_MSC_VER)
+    #if defined(_HAS_CPP0X) && _HAS_CPP0X
+      #define MADOKA_OVERRIDE override
+    #else
+      #define MADOKA_OVERRIDE
+    #endif
+  #else
+    #define MADOKA_OVERRIDE
+  #endif
+#endif  // MADOKA_OVERRIDE
 
 #endif  // MADOKA_COMMON_H_
