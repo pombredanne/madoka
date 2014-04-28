@@ -20,16 +20,20 @@ class SocketEventListener {
                           DWORD error) = 0;
 
   virtual void OnConnected(AsyncSocket* socket, DWORD error) = 0;
-  virtual void OnReceived(AsyncSocket* socket, DWORD error, int length) = 0;
-  virtual void OnSent(AsyncSocket* socket, DWORD error, int length) = 0;
+  virtual void OnReceived(AsyncSocket* socket, DWORD error, void* buffer,
+                          int length) = 0;
+  virtual void OnSent(AsyncSocket* socket, DWORD error, void* buffer,
+                      int length) = 0;
 
   virtual void OnReceived(AsyncDatagramSocket* socket, DWORD error,
-                          int length) = 0;
+                          void* buffer, int length) = 0;
   virtual void OnReceivedFrom(AsyncDatagramSocket* socket, DWORD error,
-                              int length, sockaddr* from, int from_length) = 0;
-  virtual void OnSent(AsyncDatagramSocket* socket, DWORD error, int length) = 0;
-  virtual void OnSentTo(AsyncDatagramSocket* socket, DWORD error, int length,
-                        sockaddr* to, int to_length) = 0;
+                              void* buffer, int length, sockaddr* from,
+                              int from_length) = 0;
+  virtual void OnSent(AsyncDatagramSocket* socket, DWORD error, void* buffer,
+                      int length) = 0;
+  virtual void OnSentTo(AsyncDatagramSocket* socket, DWORD error, void* buffer,
+                        int length, sockaddr* to, int to_length) = 0;
 };
 
 class SocketEventAdapter : public SocketEventListener {
@@ -37,19 +41,24 @@ class SocketEventAdapter : public SocketEventListener {
   virtual ~SocketEventAdapter() {}
 
   virtual void OnAccepted(AsyncServerSocket* server, AsyncSocket* client,
-                          DWORD error) {}
+                          DWORD error) MADOKA_OVERRIDE {}
 
-  virtual void OnConnected(AsyncSocket* socket, DWORD error) {}
-  virtual void OnReceived(AsyncSocket* socket, DWORD error, int length) {}
-  virtual void OnSent(AsyncSocket* socket, DWORD error, int length) {}
+  virtual void OnConnected(AsyncSocket* socket, DWORD error) MADOKA_OVERRIDE {}
+  virtual void OnReceived(AsyncSocket* socket, DWORD error, void* buffer,
+                          int length) MADOKA_OVERRIDE {}
+  virtual void OnSent(AsyncSocket* socket, DWORD error, void* buffer,
+                      int length) MADOKA_OVERRIDE {}
 
   virtual void OnReceived(AsyncDatagramSocket* socket, DWORD error,
-                          int length) {}
+                          void* buffer, int length) MADOKA_OVERRIDE {}
   virtual void OnReceivedFrom(AsyncDatagramSocket* socket, DWORD error,
-                              int length, sockaddr* from, int from_length) {}
-  virtual void OnSent(AsyncDatagramSocket* socket, DWORD error, int length) {}
-  virtual void OnSentTo(AsyncDatagramSocket* socket, DWORD error, int length,
-                        sockaddr* to, int to_length) {}
+                              void* buffer, int length, sockaddr* from,
+                              int from_length) MADOKA_OVERRIDE {}
+  virtual void OnSent(AsyncDatagramSocket* socket, DWORD error, void* buffer,
+                      int length) MADOKA_OVERRIDE {}
+  virtual void OnSentTo(AsyncDatagramSocket* socket, DWORD error, void* buffer,
+                        int length, sockaddr* to, int to_length)
+                        MADOKA_OVERRIDE {}
 };
 
 }  // namespace net

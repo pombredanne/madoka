@@ -323,6 +323,8 @@ void AsyncSocket::OnCompleted(AsyncContext* context, ULONG error,
   }
 
   if (listener != NULL) {
+    void* buffer = context->buf;
+
     switch (context->action) {
       case Connecting: {
         bool succeeded = EndConnect(context);
@@ -338,7 +340,7 @@ void AsyncSocket::OnCompleted(AsyncContext* context, ULONG error,
         if (result == SOCKET_ERROR && error == 0)
           error = ::GetLastError();
 
-        listener->OnReceived(this, error, bytes);
+        listener->OnReceived(this, error, buffer, bytes);
         break;
       }
 
@@ -347,7 +349,7 @@ void AsyncSocket::OnCompleted(AsyncContext* context, ULONG error,
         if (result == SOCKET_ERROR && error == 0)
           error = ::GetLastError();
 
-        listener->OnSent(this, error, bytes);
+        listener->OnSent(this, error, buffer, bytes);
         break;
       }
 

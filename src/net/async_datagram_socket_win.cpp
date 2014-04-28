@@ -324,13 +324,15 @@ void AsyncDatagramSocket::OnCompleted(AsyncContext* context, ULONG error,
   SocketEventListener* listener = context->listener;
 
   if (listener != NULL) {
+    void* buffer = context->buf;
+
     switch (context->action) {
       case Receiving: {
         int result = EndReceive(context);
         if (result == SOCKET_ERROR && error == 0)
           error = ::GetLastError();
 
-        listener->OnReceived(this, error, bytes);
+        listener->OnReceived(this, error, buffer, bytes);
         break;
       }
 
@@ -339,7 +341,7 @@ void AsyncDatagramSocket::OnCompleted(AsyncContext* context, ULONG error,
         if (result == SOCKET_ERROR && error == 0)
           error = ::GetLastError();
 
-        listener->OnSent(this, error, bytes);
+        listener->OnSent(this, error, buffer, bytes);
         break;
       }
 
@@ -350,7 +352,7 @@ void AsyncDatagramSocket::OnCompleted(AsyncContext* context, ULONG error,
         if (result == SOCKET_ERROR && error == 0)
           error = ::GetLastError();
 
-        listener->OnReceivedFrom(this, error, bytes,
+        listener->OnReceivedFrom(this, error, buffer, bytes,
                                  reinterpret_cast<sockaddr*>(&from),
                                  from_length);
         break;
@@ -363,8 +365,8 @@ void AsyncDatagramSocket::OnCompleted(AsyncContext* context, ULONG error,
         if (result == SOCKET_ERROR && error == 0)
           error = ::GetLastError();
 
-        listener->OnSentTo(this, error, bytes, reinterpret_cast<sockaddr*>(&to),
-                           to_length);
+        listener->OnSentTo(this, error, buffer, bytes,
+                           reinterpret_cast<sockaddr*>(&to), to_length);
         break;
       }
 
