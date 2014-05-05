@@ -239,6 +239,8 @@ int AsyncSocket::DoAsyncConnect(AsyncContext* context) {
   if (result != 0)
     return SOCKET_ERROR;
 
+  ::StartThreadpoolIo(io_);
+
   return ConnectEx(descriptor_, end_point->ai_addr, end_point->ai_addrlen, NULL,
                    0, NULL, context);
 }
@@ -273,7 +275,6 @@ void AsyncSocket::OnRequested(AsyncContext* context) {
   int result = 0;
   int error = ERROR_SUCCESS;
 
-  ::StartThreadpoolIo(io_);
 
   switch (context->action) {
     case Connecting:
@@ -281,11 +282,13 @@ void AsyncSocket::OnRequested(AsyncContext* context) {
       break;
 
     case Receiving:
+      ::StartThreadpoolIo(io_);
       result = ::WSARecv(descriptor_, context, 1, &bytes, &context->flags,
                          context, NULL);
       break;
 
     case Sending:
+      ::StartThreadpoolIo(io_);
       result = ::WSASend(descriptor_, context, 1, &bytes, context->flags,
                          context, NULL);
       break;
