@@ -23,6 +23,11 @@ bool ConditionVariable::Sleep(CriticalSection* lock) {
   return true;
 }
 
+bool ConditionVariable::Sleep(ReadWriteLock* lock, bool shared) {
+  // not supported
+  return false;
+}
+
 void ConditionVariable::Wake() {
   ::pthread_cond_signal(&variable_->cond);
 }

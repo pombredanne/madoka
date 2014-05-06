@@ -7,6 +7,7 @@
 
 #include <madoka/common.h>
 #include <madoka/concurrent/critical_section.h>
+#include <madoka/concurrent/read_write_lock.h>
 
 namespace madoka {
 namespace concurrent {
@@ -19,6 +20,7 @@ class ConditionVariable {
   virtual ~ConditionVariable();
 
   bool Sleep(CriticalSection* lock);
+  bool Sleep(ReadWriteLock* lock, bool shared);
   void Wake();
   void WakeAll();
 

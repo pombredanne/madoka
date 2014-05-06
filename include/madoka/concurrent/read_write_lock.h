@@ -25,6 +25,8 @@ class ReadWriteLock {
   void ReleaseWriteLock();
 
  private:
+  friend class ConditionVariable;
+
   LockImpl* lock_;
 
   DISALLOW_COPY_AND_ASSIGN(ReadWriteLock);
