@@ -69,7 +69,7 @@ void AsyncDatagramSocket::SetCallbackEnvironment(
 
 bool AsyncDatagramSocket::ReceiveAsync(void* buffer, int size, int flags,
                                        SocketEventListener* listener) {
-  if (buffer == nullptr || size == 0 || listener == nullptr)
+  if (listener == nullptr)
     return false;
   if (!connected())
     return false;
@@ -80,7 +80,7 @@ bool AsyncDatagramSocket::ReceiveAsync(void* buffer, int size, int flags,
 
 AsyncDatagramSocket::AsyncContext* AsyncDatagramSocket::BeginReceive(
     void* buffer, int size, int flags, HANDLE event) {
-  if (buffer == nullptr || size == 0 || event == NULL)
+  if (event == NULL)
     return nullptr;
   if (!connected())
     return nullptr;
@@ -100,7 +100,7 @@ int AsyncDatagramSocket::EndReceive(AsyncContext* context) {
 
 bool AsyncDatagramSocket::SendAsync(const void* buffer, int size, int flags,
                                     SocketEventListener* listener) {
-  if (buffer == nullptr || size == 0 || listener == nullptr)
+  if (listener == nullptr)
     return false;
   if (!connected())
     return false;
@@ -111,7 +111,7 @@ bool AsyncDatagramSocket::SendAsync(const void* buffer, int size, int flags,
 
 AsyncDatagramSocket::AsyncContext* AsyncDatagramSocket::BeginSend(
     const void* buffer, int size, int flags, HANDLE event) {
-  if (buffer == nullptr || size == 0 || event == NULL)
+  if (event == NULL)
     return nullptr;
   if (!connected())
     return nullptr;
@@ -131,7 +131,7 @@ int AsyncDatagramSocket::EndSend(AsyncContext* context) {
 
 bool AsyncDatagramSocket::ReceiveFromAsync(void* buffer, int size, int flags,
                                            SocketEventListener* listener) {
-  if (buffer == nullptr || size == 0 || listener == nullptr)
+  if (listener == nullptr)
     return false;
   if (!bound())
     return false;
@@ -142,7 +142,7 @@ bool AsyncDatagramSocket::ReceiveFromAsync(void* buffer, int size, int flags,
 
 AsyncDatagramSocket::AsyncContext* AsyncDatagramSocket::BeginReceiveFrom(
     void* buffer, int size, int flags, HANDLE event) {
-  if (buffer == nullptr || size == 0 || event == NULL)
+  if (event == NULL)
     return nullptr;
   if (!bound())
     return nullptr;
@@ -164,7 +164,7 @@ int AsyncDatagramSocket::EndReceiveFrom(AsyncContext* context,
 bool AsyncDatagramSocket::SendToAsync(const void* buffer, int size, int flags,
                                       const sockaddr* address, int length,
                                       SocketEventListener* listener) {
-  if (buffer == nullptr || size == 0 || listener == nullptr)
+  if (listener == nullptr)
     return false;
   if (!IsValid())
     return false;
@@ -176,7 +176,7 @@ bool AsyncDatagramSocket::SendToAsync(const void* buffer, int size, int flags,
 AsyncDatagramSocket::AsyncContext* AsyncDatagramSocket::BeginSendTo(
     const void* buffer, int size, int flags, const sockaddr* address,
     int length, HANDLE event) {
-  if (buffer == nullptr || size == 0 || event == NULL)
+  if (event == NULL)
     return nullptr;
   if (!IsValid())
     return nullptr;

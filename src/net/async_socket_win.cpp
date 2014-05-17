@@ -113,7 +113,7 @@ void AsyncSocket::CancelAsyncConnect() {
 
 bool AsyncSocket::ReceiveAsync(void* buffer, int size, int flags,
                                SocketEventListener* listener) {
-  if (buffer == nullptr || size == 0 || listener == nullptr)
+  if (listener == nullptr)
     return false;
   if (!connected())
     return false;
@@ -124,7 +124,7 @@ bool AsyncSocket::ReceiveAsync(void* buffer, int size, int flags,
 
 AsyncSocket::AsyncContext* AsyncSocket::BeginReceive(void* buffer, int size,
                                                      int flags, HANDLE event) {
-  if (buffer == nullptr || size == 0 || event == NULL)
+  if (event == NULL)
     return nullptr;
   if (!connected())
     return nullptr;
@@ -144,7 +144,7 @@ int AsyncSocket::EndReceive(AsyncContext* context) {
 
 bool AsyncSocket::SendAsync(const void* buffer, int size, int flags,
                             SocketEventListener* listener) {
-  if (buffer == nullptr || size == 0 || listener == nullptr)
+  if (listener == nullptr)
     return false;
   if (!connected())
     return false;
@@ -155,7 +155,7 @@ bool AsyncSocket::SendAsync(const void* buffer, int size, int flags,
 
 AsyncSocket::AsyncContext* AsyncSocket::BeginSend(const void* buffer, int size,
                                                   int flags, HANDLE event) {
-  if (buffer == nullptr || size == 0 || event == NULL)
+  if (event == NULL)
     return nullptr;
   if (!connected())
     return nullptr;
