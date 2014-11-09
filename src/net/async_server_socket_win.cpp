@@ -55,13 +55,15 @@ void AsyncServerSocket::SetCallbackEnvironment(
   environment_ = environment;
 }
 
-bool AsyncServerSocket::AcceptAsync(SocketEventListener* listener) {
+void AsyncServerSocket::AcceptAsync(SocketEventListener* listener) {
   if (listener == nullptr)
-    return false;
-  if (!IsValid() || !bound())
-    return false;
-
-  return DispatchRequest(listener, NULL) != nullptr;
+    listener->OnAccepted(this, nullptr, E_POINTER);
+  if (!IsValid())
+    listener->OnAccepted(this, nullptr, WSAENOTSOCK);
+  else if (!bound())
+    listener->OnAccepted(this, nullptr, WSAEINVAL);
+  else if (DispatchRequest(listener, NULL) == nullptr)
+    listener->OnAccepted(this, nullptr, GetLastError());
 }
 
 AsyncServerSocket::AsyncContext* AsyncServerSocket::BeginAccept(HANDLE event) {
@@ -102,16 +104,22 @@ AsyncServerSocket::AsyncContext* AsyncServerSocket::DispatchRequest(
     return nullptr;
 
   std::unique_ptr<AsyncContext> context(new AsyncContext(this));
-  if (context == nullptr)
+  if (context == nullptr) {
+    SetLastError(E_OUTOFMEMORY);
     return nullptr;
+  }
 
   context->client.reset(new AsyncSocket());
-  if (context->client == nullptr)
+  if (context->client == nullptr) {
+    SetLastError(E_OUTOFMEMORY);
     return nullptr;
+  }
 
   context->buffer.reset(new char[(sizeof(sockaddr_storage) + 16) * 2]);
-  if (context->buffer == nullptr)
+  if (context->buffer == nullptr) {
+    SetLastError(E_OUTOFMEMORY);
     return nullptr;
+  }
 
   if (!context->client->Create(protocol_info_.iAddressFamily,
                                protocol_info_.iSocketType,

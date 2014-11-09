@@ -61,17 +61,18 @@ void AsyncSocket::SetCallbackEnvironment(PTP_CALLBACK_ENVIRON environment) {
   environment_ = environment;
 }
 
-bool AsyncSocket::ConnectAsync(const addrinfo* end_points,
+void AsyncSocket::ConnectAsync(const addrinfo* end_points,
                                SocketEventListener* listener) {
-  if (end_points == nullptr || listener == nullptr)
-    return false;
-  if (connected())
-    return false;
+  if (listener == nullptr)
+    return;
 
-  cancel_connect_ = false;
-
-  return DispatchRequest(Connecting, end_points, nullptr, 0, 0, listener,
-                         NULL) != nullptr;
+  if (end_points == nullptr)
+    listener->OnConnected(this, WSAEFAULT);
+  else if (connected())
+    listener->OnConnected(this, WSAEISCONN);
+  else if (DispatchRequest(Connecting, end_points, nullptr, 0, 0, listener,
+                           NULL) == nullptr)
+    listener->OnConnected(this, GetLastError());
 }
 
 AsyncSocket::AsyncContext* AsyncSocket::BeginConnect(const addrinfo* end_points,
@@ -111,15 +112,15 @@ void AsyncSocket::CancelAsyncConnect() {
   }
 }
 
-bool AsyncSocket::ReceiveAsync(void* buffer, int size, int flags,
+void AsyncSocket::ReceiveAsync(void* buffer, int size, int flags,
                                SocketEventListener* listener) {
   if (listener == nullptr)
-    return false;
+    listener->OnReceived(this, E_POINTER, buffer, 0);
   if (!connected())
-    return false;
-
-  return DispatchRequest(Receiving, nullptr, buffer, size, flags, listener,
-                         NULL) != nullptr;
+    listener->OnReceived(this, WSAENOTCONN, buffer, 0);
+  else if (DispatchRequest(Receiving, nullptr, buffer, size, flags, listener,
+                         NULL) == nullptr)
+    listener->OnReceived(this, GetLastError(), buffer, 0);
 }
 
 AsyncSocket::AsyncContext* AsyncSocket::BeginReceive(void* buffer, int size,
@@ -142,15 +143,15 @@ int AsyncSocket::EndReceive(AsyncContext* context) {
   return EndRequest(context);
 }
 
-bool AsyncSocket::SendAsync(const void* buffer, int size, int flags,
+void AsyncSocket::SendAsync(const void* buffer, int size, int flags,
                             SocketEventListener* listener) {
   if (listener == nullptr)
-    return false;
+    listener->OnSent(this, E_POINTER, const_cast<void*>(buffer), 0);
   if (!connected())
-    return false;
-
-  return DispatchRequest(Sending, nullptr, const_cast<void*>(buffer), size,
-                         flags, listener, NULL) != nullptr;
+    listener->OnSent(this, WSAENOTCONN, const_cast<void*>(buffer), 0);
+  else if (DispatchRequest(Sending, nullptr, const_cast<void*>(buffer), size,
+                           flags, listener, NULL) == nullptr)
+    listener->OnSent(this, GetLastError(), const_cast<void*>(buffer), 0);
 }
 
 AsyncSocket::AsyncContext* AsyncSocket::BeginSend(const void* buffer, int size,
@@ -181,8 +182,13 @@ AsyncSocket::AsyncContext* AsyncSocket::DispatchRequest(
     return nullptr;
 
   std::unique_ptr<AsyncContext> context(new AsyncContext(this));
-  if (context == nullptr)
+  if (context == nullptr) {
+    SetLastError(E_OUTOFMEMORY);
     return nullptr;
+  }
+
+  if (action == Connecting)
+    cancel_connect_ = false;
 
   context->len = size;
   context->buf = static_cast<char*>(buffer);

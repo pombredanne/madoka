@@ -34,18 +34,18 @@ class AsyncSocket : public Socket {
 
   // Connects to a specified address asynchronously. The process will complete
   // when any connection attempt succeeds or all attempts fail.
-  bool ConnectAsync(const addrinfo* end_points, SocketEventListener* listener);
+  void ConnectAsync(const addrinfo* end_points, SocketEventListener* listener);
   AsyncContext* BeginConnect(const addrinfo* end_points, HANDLE event);
   bool EndConnect(AsyncContext* context);
 
   void CancelAsyncConnect();
 
-  bool ReceiveAsync(void* buffer, int size, int flags,
+  void ReceiveAsync(void* buffer, int size, int flags,
                     SocketEventListener* listener);
   AsyncContext* BeginReceive(void* buffer, int size, int flags, HANDLE event);
   int EndReceive(AsyncContext* context);
 
-  bool SendAsync(const void* buffer, int size, int flags,
+  void SendAsync(const void* buffer, int size, int flags,
                  SocketEventListener* listener);
   AsyncContext* BeginSend(const void* buffer, int size, int flags,
                           HANDLE event);

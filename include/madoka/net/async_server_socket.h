@@ -33,7 +33,7 @@ class AsyncServerSocket : public ServerSocket {
   static PTP_CALLBACK_ENVIRON GetCallbackEnvironment();
   static void SetCallbackEnvironment(PTP_CALLBACK_ENVIRON environment);
 
-  bool AcceptAsync(SocketEventListener* listener);
+  void AcceptAsync(SocketEventListener* listener);
   AsyncContext* BeginAccept(HANDLE event);
   AsyncSocket* EndAccept(AsyncContext* context);
 

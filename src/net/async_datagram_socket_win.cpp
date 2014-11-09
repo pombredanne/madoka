@@ -67,15 +67,15 @@ void AsyncDatagramSocket::SetCallbackEnvironment(
   environment_ = environment;
 }
 
-bool AsyncDatagramSocket::ReceiveAsync(void* buffer, int size, int flags,
+void AsyncDatagramSocket::ReceiveAsync(void* buffer, int size, int flags,
                                        SocketEventListener* listener) {
   if (listener == nullptr)
-    return false;
+    listener->OnReceived(this, E_POINTER, buffer, 0);
   if (!connected())
-    return false;
-
-  return DispatchRequest(Receiving, buffer, size, flags, nullptr, 0, listener,
-                         NULL) != nullptr;
+    listener->OnReceived(this, WSAENOTCONN, buffer, 0);
+  else if (DispatchRequest(Receiving, buffer, size, flags, nullptr, 0, listener,
+                           NULL) == nullptr)
+    listener->OnReceived(this, GetLastError(), buffer, 0);
 }
 
 AsyncDatagramSocket::AsyncContext* AsyncDatagramSocket::BeginReceive(
@@ -98,15 +98,15 @@ int AsyncDatagramSocket::EndReceive(AsyncContext* context) {
   return EndRequest(context, nullptr, nullptr);
 }
 
-bool AsyncDatagramSocket::SendAsync(const void* buffer, int size, int flags,
+void AsyncDatagramSocket::SendAsync(const void* buffer, int size, int flags,
                                     SocketEventListener* listener) {
   if (listener == nullptr)
-    return false;
+    listener->OnSent(this, E_POINTER, const_cast<void*>(buffer), 0);
   if (!connected())
-    return false;
-
-  return DispatchRequest(Sending, const_cast<void*>(buffer), size, flags,
-                         nullptr, 0, listener, NULL) != nullptr;
+    listener->OnSent(this, WSAENOTCONN, const_cast<void*>(buffer), 0);
+  else if (DispatchRequest(Sending, const_cast<void*>(buffer), size, flags,
+                           nullptr, 0, listener, NULL) == nullptr)
+    listener->OnSent(this, GetLastError(), const_cast<void*>(buffer), 0);
 }
 
 AsyncDatagramSocket::AsyncContext* AsyncDatagramSocket::BeginSend(
@@ -129,15 +129,15 @@ int AsyncDatagramSocket::EndSend(AsyncContext* context) {
   return EndRequest(context, nullptr, nullptr);
 }
 
-bool AsyncDatagramSocket::ReceiveFromAsync(void* buffer, int size, int flags,
+void AsyncDatagramSocket::ReceiveFromAsync(void* buffer, int size, int flags,
                                            SocketEventListener* listener) {
   if (listener == nullptr)
-    return false;
+    listener->OnReceivedFrom(this, E_POINTER, buffer, size, nullptr, 0);
   if (!bound())
-    return false;
-
-  return DispatchRequest(ReceivingFrom, buffer, size, flags, nullptr, 0,
-                         listener, NULL) != nullptr;
+    listener->OnReceivedFrom(this, WSAEINVAL, buffer, size, nullptr, 0);
+  else if (DispatchRequest(ReceivingFrom, buffer, size, flags, nullptr, 0,
+                           listener, NULL) == nullptr)
+    listener->OnReceivedFrom(this, GetLastError(), buffer, size, nullptr, 0);
 }
 
 AsyncDatagramSocket::AsyncContext* AsyncDatagramSocket::BeginReceiveFrom(
@@ -161,16 +161,19 @@ int AsyncDatagramSocket::EndReceiveFrom(AsyncContext* context,
   return EndRequest(context, address, length);
 }
 
-bool AsyncDatagramSocket::SendToAsync(const void* buffer, int size, int flags,
+void AsyncDatagramSocket::SendToAsync(const void* buffer, int size, int flags,
                                       const sockaddr* address, int length,
                                       SocketEventListener* listener) {
   if (listener == nullptr)
-    return false;
+    listener->OnSentTo(this, E_POINTER, const_cast<void*>(buffer), size,
+                       const_cast<sockaddr*>(address), length);
   if (!IsValid())
-    return false;
-
-  return DispatchRequest(SendingTo, const_cast<void*>(buffer), size, flags,
-                         address, length, listener, NULL) != nullptr;
+    listener->OnSentTo(this, WSAENOTSOCK, const_cast<void*>(buffer), size,
+                       const_cast<sockaddr*>(address), length);
+  if (DispatchRequest(SendingTo, const_cast<void*>(buffer), size, flags,
+                      address, length, listener, NULL) == nullptr)
+    listener->OnSentTo(this, GetLastError(), const_cast<void*>(buffer), size,
+                       const_cast<sockaddr*>(address), length);
 }
 
 AsyncDatagramSocket::AsyncContext* AsyncDatagramSocket::BeginSendTo(
@@ -201,8 +204,10 @@ AsyncDatagramSocket::AsyncContext* AsyncDatagramSocket::DispatchRequest(
     return nullptr;
 
   std::unique_ptr<AsyncContext> context(new AsyncContext(this));
-  if (context == nullptr)
+  if (context == nullptr) {
+    SetLastError(E_OUTOFMEMORY);
     return nullptr;
+  }
 
   context->len = size;
   context->buf = static_cast<char*>(buffer);

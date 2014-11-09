@@ -33,24 +33,24 @@ class AsyncDatagramSocket : public DatagramSocket {
   static PTP_CALLBACK_ENVIRON GetCallbackEnvironment();
   static void SetCallbackEnvironment(PTP_CALLBACK_ENVIRON environment);
 
-  bool ReceiveAsync(void* buffer, int size, int flags,
+  void ReceiveAsync(void* buffer, int size, int flags,
                     SocketEventListener* listener);
   AsyncContext* BeginReceive(void* buffer, int size, int flags, HANDLE event);
   int EndReceive(AsyncContext* context);
 
-  bool SendAsync(const void* buffer, int size, int flags,
+  void SendAsync(const void* buffer, int size, int flags,
                  SocketEventListener* listener);
   AsyncContext* BeginSend(const void* buffer, int size, int flags,
                           HANDLE event);
   int EndSend(AsyncContext* context);
 
-  bool ReceiveFromAsync(void* buffer, int size, int flags,
+  void ReceiveFromAsync(void* buffer, int size, int flags,
                         SocketEventListener* listener);
   AsyncContext* BeginReceiveFrom(void* buffer, int size, int flags,
                                  HANDLE event);
   int EndReceiveFrom(AsyncContext* context, sockaddr* address, int* length);
 
-  bool SendToAsync(const void* buffer, int size, int flags,
+  void SendToAsync(const void* buffer, int size, int flags,
                    const sockaddr* address, int length,
                    SocketEventListener* listener);
   AsyncContext* BeginSendTo(const void* buffer, int size, int flags,
