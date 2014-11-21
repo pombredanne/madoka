@@ -38,8 +38,6 @@ class AsyncSocket : public Socket {
   AsyncContext* BeginConnect(const addrinfo* end_points, HANDLE event);
   bool EndConnect(AsyncContext* context);
 
-  void CancelAsyncConnect();
-
   void ReceiveAsync(void* buffer, int size, int flags,
                     SocketEventListener* listener);
   AsyncContext* BeginReceive(void* buffer, int size, int flags, HANDLE event);

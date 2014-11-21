@@ -42,6 +42,8 @@ AsyncSocket::~AsyncSocket() {
 }
 
 void AsyncSocket::Close() {
+  cancel_connect_ = true;
+
   Socket::Close();
 
   if (io_ != NULL) {
@@ -64,9 +66,8 @@ void AsyncSocket::SetCallbackEnvironment(PTP_CALLBACK_ENVIRON environment) {
 void AsyncSocket::ConnectAsync(const addrinfo* end_points,
                                SocketEventListener* listener) {
   if (listener == nullptr)
-    return;
-
-  if (end_points == nullptr)
+    listener->OnConnected(this, E_POINTER);
+  else if (end_points == nullptr)
     listener->OnConnected(this, WSAEFAULT);
   else if (connected())
     listener->OnConnected(this, WSAEISCONN);
@@ -103,13 +104,6 @@ bool AsyncSocket::EndConnect(AsyncContext* context) {
   set_connected(true);
 
   return true;
-}
-
-void AsyncSocket::CancelAsyncConnect() {
-  if (!connected()) {
-    cancel_connect_ = true;
-    Close();
-  }
 }
 
 void AsyncSocket::ReceiveAsync(void* buffer, int size, int flags,
@@ -280,7 +274,6 @@ void AsyncSocket::OnRequested(AsyncContext* context) {
   DWORD bytes = 0;
   int result = 0;
   int error = ERROR_SUCCESS;
-
 
   switch (context->action) {
     case Connecting:
