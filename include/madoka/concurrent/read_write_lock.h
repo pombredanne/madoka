@@ -36,11 +36,11 @@ class ReadLock : public Lockable {
  public:
   explicit ReadLock(ReadWriteLock* lock) : lock_(lock) {}
 
-  virtual void Lock() {
+  void Lock() MADOKA_OVERRIDE {
     lock_->AcquireReadLock();
   }
 
-  virtual void Unlock() {
+  void Unlock() MADOKA_OVERRIDE {
     lock_->ReleaseReadLock();
   }
 
@@ -54,11 +54,11 @@ class WriteLock : public Lockable {
  public:
   explicit WriteLock(ReadWriteLock* lock) : lock_(lock) {}
 
-  virtual void Lock() {
+  void Lock() MADOKA_OVERRIDE {
     lock_->AcquireWriteLock();
   }
 
-  virtual void Unlock() {
+  void Unlock() MADOKA_OVERRIDE {
     lock_->ReleaseWriteLock();
   }
 

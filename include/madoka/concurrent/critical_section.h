@@ -16,9 +16,9 @@ class CriticalSection : public Lockable {
   CriticalSection();
   virtual ~CriticalSection();
 
-  virtual void Lock();
-  virtual bool TryLock();
-  virtual void Unlock();
+  void Lock() MADOKA_OVERRIDE;
+  bool TryLock();
+  void Unlock() MADOKA_OVERRIDE;
 
  private:
   friend class ConditionVariable;

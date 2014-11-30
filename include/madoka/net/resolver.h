@@ -114,17 +114,20 @@ class ResolverBase {
 
 class Resolver : public ResolverBase<addrinfo, char> {
  public:
+  Resolver() {
+  }
+
   virtual ~Resolver() {
     Free();
   }
 
-  virtual bool Resolve(const char* node_name, const char* service) {
+  bool Resolve(const char* node_name, const char* service) MADOKA_OVERRIDE {
     Free();
     error_ = ::getaddrinfo(node_name, service, &hints_, &entries_);
     return error_ == 0;
   }
 
-  virtual bool Resolve(const char* node_name, int port) {
+  bool Resolve(const char* node_name, int port) MADOKA_OVERRIDE {
     Free();
 
     if (port < 0 || 65535 < port) {
@@ -154,6 +157,9 @@ class Resolver : public ResolverBase<addrinfo, char> {
       entries_ = nullptr;
     }
   }
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(Resolver);
 };
 
 #ifdef _WIN32
@@ -161,17 +167,21 @@ class Resolver : public ResolverBase<addrinfo, char> {
 
 class ResolverW : public ResolverBase<ADDRINFOW, wchar_t> {
  public:
+  ResolverW() {
+  }
+
   virtual ~ResolverW() {
     Free();
   }
 
-  virtual bool Resolve(const wchar_t* node_name, const wchar_t* service) {
+  bool Resolve(const wchar_t* node_name,
+               const wchar_t* service) MADOKA_OVERRIDE {
     Free();
     error_ = ::GetAddrInfoW(node_name, service, &hints_, &entries_);
     return error_ == 0;
   }
 
-  virtual bool Resolve(const wchar_t* node_name, int port) {
+  bool Resolve(const wchar_t* node_name, int port) MADOKA_OVERRIDE {
     Free();
 
     if (port < 0 || 65535 < port) {
@@ -201,6 +211,9 @@ class ResolverW : public ResolverBase<ADDRINFOW, wchar_t> {
       entries_ = nullptr;
     }
   }
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(ResolverW);
 };
 
 #ifdef UNICODE

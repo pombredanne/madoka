@@ -19,7 +19,7 @@ class Socket : public AbstractSocket {
     Close();
   }
 
-  virtual void Close() {
+  void Close() MADOKA_OVERRIDE {
     connected_ = false;
     AbstractSocket::Close();
   }

@@ -28,7 +28,7 @@ class AsyncServerSocket : public ServerSocket {
   AsyncServerSocket();
   virtual ~AsyncServerSocket();
 
-  virtual void Close();
+  void Close() MADOKA_OVERRIDE;
 
   static PTP_CALLBACK_ENVIRON GetCallbackEnvironment();
   static void SetCallbackEnvironment(PTP_CALLBACK_ENVIRON environment);
@@ -56,6 +56,8 @@ class AsyncServerSocket : public ServerSocket {
   INIT_ONCE init_once_;
   PTP_IO io_;
   WSAPROTOCOL_INFO protocol_info_;
+
+  DISALLOW_COPY_AND_ASSIGN(AsyncServerSocket);
 };
 
 }  // namespace net

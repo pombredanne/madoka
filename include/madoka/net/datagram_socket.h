@@ -23,7 +23,7 @@ class DatagramSocket : public AbstractSocket {
     Close();
   }
 
-  virtual void Close() {
+  void Close() MADOKA_OVERRIDE {
     bound_ = false;
     connected_ = false;
     AbstractSocket::Close();

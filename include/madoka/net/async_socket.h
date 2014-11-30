@@ -27,7 +27,7 @@ class AsyncSocket : public Socket {
   AsyncSocket();
   virtual ~AsyncSocket();
 
-  virtual void Close();
+  void Close() MADOKA_OVERRIDE;
 
   static PTP_CALLBACK_ENVIRON GetCallbackEnvironment();
   static void SetCallbackEnvironment(PTP_CALLBACK_ENVIRON environment);
@@ -80,6 +80,8 @@ class AsyncSocket : public Socket {
   INIT_ONCE init_once_;
   PTP_IO io_;
   bool cancel_connect_;
+
+  DISALLOW_COPY_AND_ASSIGN(AsyncSocket);
 };
 
 }  // namespace net

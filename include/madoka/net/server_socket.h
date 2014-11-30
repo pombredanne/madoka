@@ -18,7 +18,7 @@ class ServerSocket : public AbstractSocket {
     Close();
   }
 
-  virtual void Close() {
+  void Close() MADOKA_OVERRIDE {
     bound_ = false;
     AbstractSocket::Close();
   }
