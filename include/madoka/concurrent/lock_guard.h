@@ -9,18 +9,26 @@
 namespace madoka {
 namespace concurrent {
 
+class ReadWriteLock;
+
 class LockGuard {
  public:
-  explicit LockGuard(Lockable* lock) : lock_(lock) {
-    lock_->Lock();
-  }
+  explicit LockGuard(Lockable* lock);
+  LockGuard(ReadWriteLock* rw_lock, bool exclusive);
 
-  ~LockGuard() {
-    lock_->Unlock();
-  }
+  ~LockGuard();
 
  private:
+  enum Mode {
+    Invalid,
+    Generic,
+    Shared,
+    Exclusive,
+  };
+
   Lockable* const lock_;
+  ReadWriteLock* const rw_lock_;
+  Mode mode_;
 
   DISALLOW_COPY_AND_ASSIGN(LockGuard);
 };

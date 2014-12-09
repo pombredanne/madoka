@@ -9,7 +9,8 @@ AM_CPPFLAGS = -Iinclude -Isrc
 
 noinst_LIBRARIES = libmadoka.a
 libmadoka_a_SOURCES = \
-  src/concurrent/internals.h
+  src/concurrent/internals.h \
+  src/concurrent/lock_guard.cpp
 
 if ENABLE_WIN32
 libmadoka_a_SOURCES += \

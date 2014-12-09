@@ -11,7 +11,7 @@ namespace concurrent {
 
 struct LockImpl;
 
-class ReadWriteLock {
+class ReadWriteLock : public Lockable {
  public:
   ReadWriteLock();
   ~ReadWriteLock();
@@ -19,6 +19,14 @@ class ReadWriteLock {
   void AcquireReadLock();
   bool TryAcquireReadLock();
   void ReleaseReadLock();
+
+  inline void Lock() MADOKA_OVERRIDE {
+    AcquireReadLock();
+  }
+
+  inline void Unlock() MADOKA_OVERRIDE {
+    ReleaseReadLock();
+  }
 
   void AcquireWriteLock();
   bool TryAcquireWriteLock();

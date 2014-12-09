@@ -42,6 +42,7 @@
   <ItemGroup>
     <ClCompile Include="src\concurrent\condition_variable_win.cpp" />
     <ClCompile Include="src\concurrent\critical_section_win.cpp" />
+    <ClCompile Include="src\concurrent\lock_guard.cpp" />
     <ClCompile Include="src\concurrent\read_write_lock_win.cpp" />
     <ClCompile Include="src\net\async_datagram_socket_win.cpp" />
     <ClCompile Include="src\net\async_server_socket_win.cpp" />
