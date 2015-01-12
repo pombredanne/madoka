@@ -21,10 +21,10 @@ bool ConditionVariable::Sleep(CriticalSection* lock) {
   return ::SleepConditionVariableCS(variable_, lock->mutex_, INFINITE) != FALSE;
 }
 
-bool ConditionVariable::Sleep(ReadWriteLock* lock, bool shared) {
+bool ConditionVariable::Sleep(ReadWriteLock* lock, bool exclusive) {
   return ::SleepConditionVariableSRW(
       variable_, lock->lock_, INFINITE,
-      shared ? CONDITION_VARIABLE_LOCKMODE_SHARED : 0) != FALSE;
+      exclusive ? 0 : CONDITION_VARIABLE_LOCKMODE_SHARED) != FALSE;
 }
 
 void ConditionVariable::Wake() {

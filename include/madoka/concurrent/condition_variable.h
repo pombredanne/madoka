@@ -20,7 +20,11 @@ class ConditionVariable {
   virtual ~ConditionVariable();
 
   bool Sleep(CriticalSection* lock);
-  bool Sleep(ReadWriteLock* lock, bool shared);
+  bool Sleep(ReadWriteLock* lock, bool exclusive);
+  bool Sleep(ReadWriteLock* lock) {
+    return Sleep(lock, false);
+  }
+
   void Wake();
   void WakeAll();
 

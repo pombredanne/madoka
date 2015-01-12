@@ -23,7 +23,7 @@ bool ConditionVariable::Sleep(CriticalSection* lock) {
   return true;
 }
 
-bool ConditionVariable::Sleep(ReadWriteLock* lock, bool shared) {
+bool ConditionVariable::Sleep(ReadWriteLock* lock, bool exclusive) {
   // not supported
   return false;
 }
