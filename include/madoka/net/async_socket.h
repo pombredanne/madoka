@@ -56,6 +56,8 @@ class AsyncSocket : public Socket {
     None, Connecting, Receiving, Sending
   };
 
+  void CloseInternal();
+
   AsyncContext* DispatchRequest(Action action, const addrinfo* end_points,
                                 void* buffer, int size, int flags,
                                 SocketEventListener* listener, HANDLE event);
@@ -65,7 +67,7 @@ class AsyncSocket : public Socket {
 
   static BOOL CALLBACK OnInitialize(INIT_ONCE* init_once, void* param,
                                     void** context);
-  BOOL OnInitialize();
+  BOOL OnInitialize(void** context);
 
   static void CALLBACK OnRequested(PTP_CALLBACK_INSTANCE instance, void* param);
   void OnRequested(AsyncContext* context);

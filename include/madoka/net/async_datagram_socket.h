@@ -62,6 +62,8 @@ class AsyncDatagramSocket : public DatagramSocket {
     None, Receiving, Sending, ReceivingFrom, SendingTo
   };
 
+  void CloseInternal();
+
   AsyncContext* DispatchRequest(Action action, void* buffer, int size,
                                 int flags, const sockaddr* address, int length,
                                 SocketEventListener* listener, HANDLE event);
@@ -69,7 +71,7 @@ class AsyncDatagramSocket : public DatagramSocket {
 
   static BOOL CALLBACK OnInitialize(INIT_ONCE* init_once, void* param,
                                     void** context);
-  BOOL OnInitialize();
+  BOOL OnInitialize(void** context);
 
   static void CALLBACK OnRequested(PTP_CALLBACK_INSTANCE instance, void* param);
   void OnRequested(AsyncContext* context);

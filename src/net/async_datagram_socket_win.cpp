@@ -35,26 +35,24 @@ struct AsyncDatagramSocket::AsyncContext : OVERLAPPED, WSABUF {
 
 PTP_CALLBACK_ENVIRON AsyncDatagramSocket::environment_ = NULL;
 
-AsyncDatagramSocket::AsyncDatagramSocket() : init_once_(), io_() {
+AsyncDatagramSocket::AsyncDatagramSocket() : io_() {
+  ::InitOnceInitialize(&init_once_);
 }
 
 AsyncDatagramSocket::AsyncDatagramSocket(int family, int protocol)
-    : DatagramSocket(family, protocol), init_once_(), io_() {
+    : DatagramSocket(family, protocol), io_() {
+  ::InitOnceInitialize(&init_once_);
 }
 
 AsyncDatagramSocket::~AsyncDatagramSocket() {
   Close();
+  CloseInternal();
 }
 
 void AsyncDatagramSocket::Close() {
   DatagramSocket::Close();
 
-  if (io_ != NULL) {
-    ::WaitForThreadpoolIoCallbacks(io_, FALSE);
-    ::CloseThreadpoolIo(io_);
-    io_ = NULL;
-  }
-
+  CloseInternal();
   ::InitOnceInitialize(&init_once_);
 }
 
@@ -197,6 +195,14 @@ int AsyncDatagramSocket::EndSendTo(AsyncContext* context) {
   return EndRequest(context, nullptr, nullptr);
 }
 
+void AsyncDatagramSocket::CloseInternal() {
+  if (io_ != NULL) {
+    ::WaitForThreadpoolIoCallbacks(io_, FALSE);
+    ::CloseThreadpoolIo(io_);
+    io_ = NULL;
+  }
+}
+
 AsyncDatagramSocket::AsyncContext* AsyncDatagramSocket::DispatchRequest(
     Action action, void* buffer, int size, int flags, const sockaddr* address,
     int length, SocketEventListener* listener, HANDLE event) {
@@ -254,16 +260,20 @@ int AsyncDatagramSocket::EndRequest(AsyncContext* context, sockaddr* address,
 
 BOOL CALLBACK AsyncDatagramSocket::OnInitialize(INIT_ONCE* init_once,
                                                 void* param, void** context) {
-  return static_cast<AsyncDatagramSocket*>(param)->OnInitialize();
+  return static_cast<AsyncDatagramSocket*>(param)->OnInitialize(context);
 }
 
-BOOL AsyncDatagramSocket::OnInitialize() {
-  if (io_ == NULL) {
-    io_ = ::CreateThreadpoolIo(reinterpret_cast<HANDLE>(descriptor_),
-                               OnCompleted, this, environment_);
-    if (io_ == NULL)
-      return FALSE;
-  }
+BOOL AsyncDatagramSocket::OnInitialize(void** context) {
+  if (!IsValid())
+    return FALSE;
+
+  CloseInternal();
+  assert(io_ == NULL);
+
+  io_ = ::CreateThreadpoolIo(reinterpret_cast<HANDLE>(descriptor_),
+                              OnCompleted, this, environment_);
+  if (io_ == NULL)
+    return FALSE;
 
   return TRUE;
 }

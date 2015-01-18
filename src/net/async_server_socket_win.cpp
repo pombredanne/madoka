@@ -27,21 +27,17 @@ struct AsyncServerSocket::AsyncContext : OVERLAPPED {
 
 PTP_CALLBACK_ENVIRON AsyncServerSocket::environment_ = NULL;
 
-AsyncServerSocket::AsyncServerSocket() : init_once_(), io_() {
+AsyncServerSocket::AsyncServerSocket() : io_() {
+  ::InitOnceInitialize(&init_once_);
 }
 
 AsyncServerSocket::~AsyncServerSocket() {
   Close();
+  CloseInternal();
 }
 
 void AsyncServerSocket::Close() {
   ServerSocket::Close();
-
-  if (io_ != NULL) {
-    ::WaitForThreadpoolIoCallbacks(io_, FALSE);
-    ::CloseThreadpoolIo(io_);
-    io_ = NULL;
-  }
 
   ::InitOnceInitialize(&init_once_);
 }
@@ -98,6 +94,14 @@ AsyncSocket* AsyncServerSocket::EndAccept(AsyncContext* context) {
   return client;
 }
 
+void AsyncServerSocket::CloseInternal() {
+  if (io_ != NULL) {
+    ::WaitForThreadpoolIoCallbacks(io_, FALSE);
+    ::CloseThreadpoolIo(io_);
+    io_ = NULL;
+  }
+}
+
 AsyncServerSocket::AsyncContext* AsyncServerSocket::DispatchRequest(
     SocketEventListener* listener, HANDLE event) {
   if (!::InitOnceExecuteOnce(&init_once_, OnInitialize, this, nullptr))
@@ -140,16 +144,20 @@ AsyncServerSocket::AsyncContext* AsyncServerSocket::DispatchRequest(
 
 BOOL CALLBACK AsyncServerSocket::OnInitialize(INIT_ONCE* init_once, void* param,
                                               void** context) {
-  return static_cast<AsyncServerSocket*>(param)->OnInitialize();
+  return static_cast<AsyncServerSocket*>(param)->OnInitialize(context);
 }
 
-BOOL AsyncServerSocket::OnInitialize() {
-  if (io_ == NULL) {
-    io_ = ::CreateThreadpoolIo(reinterpret_cast<HANDLE>(descriptor_),
-                               OnCompleted, this, environment_);
-    if (io_ == NULL)
-      return FALSE;
-  }
+BOOL AsyncServerSocket::OnInitialize(void** context) {
+  if (!IsValid())
+    return FALSE;
+
+  CloseInternal();
+  assert(io_ == NULL);
+
+  io_ = ::CreateThreadpoolIo(reinterpret_cast<HANDLE>(descriptor_),
+                              OnCompleted, this, environment_);
+  if (io_ == NULL)
+    return FALSE;
 
   if (!GetOption(SOL_SOCKET, SO_PROTOCOL_INFO, &protocol_info_))
     return FALSE;

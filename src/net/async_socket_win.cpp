@@ -34,23 +34,19 @@ struct AsyncSocket::AsyncContext : OVERLAPPED, WSABUF {
 PTP_CALLBACK_ENVIRON AsyncSocket::environment_ = NULL;
 LPFN_CONNECTEX AsyncSocket::ConnectEx = NULL;
 
-AsyncSocket::AsyncSocket() : init_once_(), io_(), cancel_connect_(false) {
+AsyncSocket::AsyncSocket() : io_(), cancel_connect_(false) {
+  ::InitOnceInitialize(&init_once_);
 }
 
 AsyncSocket::~AsyncSocket() {
   Close();
+  CloseInternal();
 }
 
 void AsyncSocket::Close() {
   cancel_connect_ = true;
 
   Socket::Close();
-
-  if (io_ != NULL) {
-    ::WaitForThreadpoolIoCallbacks(io_, FALSE);
-    ::CloseThreadpoolIo(io_);
-    io_ = NULL;
-  }
 
   ::InitOnceInitialize(&init_once_);
 }
@@ -168,10 +164,18 @@ int AsyncSocket::EndSend(AsyncContext* context) {
   return EndRequest(context);
 }
 
+void AsyncSocket::CloseInternal() {
+  if (io_ != NULL) {
+    ::WaitForThreadpoolIoCallbacks(io_, FALSE);
+    ::CloseThreadpoolIo(io_);
+    io_ = NULL;
+  }
+}
+
 AsyncSocket::AsyncContext* AsyncSocket::DispatchRequest(
     Action action,  const addrinfo* end_points, void* buffer, int size,
     int flags, SocketEventListener* listener, HANDLE event) {
-  if (IsValid() &&
+  if (action != Connecting &&
       !::InitOnceExecuteOnce(&init_once_, OnInitialize, this, nullptr))
     return nullptr;
 
@@ -218,10 +222,14 @@ int AsyncSocket::EndRequest(AsyncContext* context) {
 }
 
 int AsyncSocket::DoAsyncConnect(AsyncContext* context) {
-  const addrinfo* end_point = context->end_point;
+  if (cancel_connect_)
+    return SOCKET_ERROR;
 
+  const addrinfo* end_point = context->end_point;
   if (!Create(end_point))
     return SOCKET_ERROR;
+
+  cancel_connect_ = false;
 
   if (!::InitOnceExecuteOnce(&init_once_, OnInitialize, this, nullptr))
     return SOCKET_ERROR;
@@ -247,19 +255,20 @@ int AsyncSocket::DoAsyncConnect(AsyncContext* context) {
 
 BOOL CALLBACK AsyncSocket::OnInitialize(INIT_ONCE* init_once, void* param,
                                         void** context) {
-  return static_cast<AsyncSocket*>(param)->OnInitialize();
+  return static_cast<AsyncSocket*>(param)->OnInitialize(context);
 }
 
-BOOL AsyncSocket::OnInitialize() {
+BOOL AsyncSocket::OnInitialize(void** context) {
   if (!IsValid())
-    return TRUE;  // for use with DoAsyncConnect
+    return FALSE;
 
-  if (io_ == NULL) {
-    io_ = ::CreateThreadpoolIo(reinterpret_cast<HANDLE>(descriptor_),
-                               OnCompleted, this, environment_);
-    if (io_ == NULL)
-      return FALSE;
-  }
+  CloseInternal();
+  assert(io_ == NULL);
+
+  io_ = ::CreateThreadpoolIo(reinterpret_cast<HANDLE>(descriptor_),
+                              OnCompleted, this, environment_);
+  if (io_ == NULL)
+    return FALSE;
 
   return TRUE;
 }

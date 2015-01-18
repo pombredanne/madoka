@@ -38,11 +38,13 @@ class AsyncServerSocket : public ServerSocket {
   AsyncSocket* EndAccept(AsyncContext* context);
 
  private:
+  void CloseInternal();
+
   AsyncContext* DispatchRequest(SocketEventListener* listener, HANDLE event);
 
   static BOOL CALLBACK OnInitialize(INIT_ONCE* init_once, void* param,
                                     void** context);
-  BOOL OnInitialize();
+  BOOL OnInitialize(void** context);
 
   static void CALLBACK OnRequested(PTP_CALLBACK_INSTANCE instance, void* param);
   void OnRequested(AsyncContext* context);
