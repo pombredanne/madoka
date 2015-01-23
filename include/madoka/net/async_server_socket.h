@@ -13,8 +13,13 @@
   #error The AsyncServerSocket requires the thread pool API.
 #endif  // _WIN32_WINNT < 0x0600
 
+#include <madoka/concurrent/condition_variable.h>
+#include <madoka/concurrent/critical_section.h>
 #include <madoka/net/async_socket.h>
 #include <madoka/net/server_socket.h>
+
+#include <memory>
+#include <vector>
 
 namespace madoka {
 namespace net {
@@ -58,6 +63,10 @@ class AsyncServerSocket : public ServerSocket {
   INIT_ONCE init_once_;
   PTP_IO io_;
   WSAPROTOCOL_INFO protocol_info_;
+
+  std::vector<std::unique_ptr<AsyncContext>> requests_;
+  madoka::concurrent::ConditionVariable empty_;
+  madoka::concurrent::CriticalSection lock_;
 
   DISALLOW_COPY_AND_ASSIGN(AsyncServerSocket);
 };

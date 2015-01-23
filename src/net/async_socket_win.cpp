@@ -5,7 +5,9 @@
 #include <assert.h>
 
 #include <memory>
+#include <utility>
 
+#include "madoka/concurrent/lock_guard.h"
 #include "madoka/net/socket_event_listener.h"
 
 namespace madoka {
@@ -41,6 +43,10 @@ AsyncSocket::AsyncSocket() : io_(), cancel_connect_(false) {
 AsyncSocket::~AsyncSocket() {
   Close();
   CloseInternal();
+
+  madoka::concurrent::LockGuard guard(&lock_);
+  while (!requests_.empty())
+    empty_.Sleep(&lock_);
 }
 
 void AsyncSocket::Close() {
@@ -179,7 +185,7 @@ AsyncSocket::AsyncContext* AsyncSocket::DispatchRequest(
       !::InitOnceExecuteOnce(&init_once_, OnInitialize, this, nullptr))
     return nullptr;
 
-  std::unique_ptr<AsyncContext> context(new AsyncContext(this));
+  auto  context = std::make_unique<AsyncContext>(this);
   if (context == nullptr) {
     SetLastError(E_OUTOFMEMORY);
     return nullptr;
@@ -199,10 +205,15 @@ AsyncSocket::AsyncContext* AsyncSocket::DispatchRequest(
   if (event != NULL && !::ResetEvent(event))
     return nullptr;
 
-  if (!::TrySubmitThreadpoolCallback(OnRequested, context.get(), environment_))
+  madoka::concurrent::LockGuard guard(&lock_);
+  auto pointer = context.get();
+
+  if (!::TrySubmitThreadpoolCallback(OnRequested, pointer, environment_))
     return nullptr;
 
-  return context.release();
+  requests_.push_back(std::move(context));
+
+  return pointer;
 }
 
 int AsyncSocket::EndRequest(AsyncContext* context) {
@@ -213,7 +224,18 @@ int AsyncSocket::EndRequest(AsyncContext* context) {
   BOOL succeeded = ::GetOverlappedResult(reinterpret_cast<HANDLE>(descriptor_),
                                          context, &bytes, FALSE);
 
-  delete context;
+  lock_.Lock();
+  for (auto i = requests_.begin(), l = requests_.end(); i != l; ++i) {
+    if (i->get() == context) {
+      requests_.erase(i);
+
+      if (requests_.empty())
+        empty_.WakeAll();
+
+      break;
+    }
+  }
+  lock_.Unlock();
 
   if (!succeeded)
     return SOCKET_ERROR;

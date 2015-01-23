@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "madoka/concurrent/lock_guard.h"
 #include "madoka/net/socket_event_listener.h"
 
 namespace madoka {
@@ -46,7 +47,10 @@ AsyncDatagramSocket::AsyncDatagramSocket(int family, int protocol)
 
 AsyncDatagramSocket::~AsyncDatagramSocket() {
   Close();
-  CloseInternal();
+
+  madoka::concurrent::LockGuard guard(&lock_);
+  while (!requests_.empty())
+    empty_.WakeAll();
 }
 
 void AsyncDatagramSocket::Close() {
@@ -209,7 +213,7 @@ AsyncDatagramSocket::AsyncContext* AsyncDatagramSocket::DispatchRequest(
   if (!::InitOnceExecuteOnce(&init_once_, OnInitialize, this, nullptr))
     return nullptr;
 
-  std::unique_ptr<AsyncContext> context(new AsyncContext(this));
+  auto  context = std::make_unique<AsyncContext>(this);
   if (context == nullptr) {
     SetLastError(E_OUTOFMEMORY);
     return nullptr;
@@ -230,10 +234,15 @@ AsyncDatagramSocket::AsyncContext* AsyncDatagramSocket::DispatchRequest(
   if (event != NULL && !::ResetEvent(event))
     return nullptr;
 
-  if (!::TrySubmitThreadpoolCallback(OnRequested, context.get(), environment_))
+  madoka::concurrent::LockGuard guard(&lock_);
+  auto pointer = context.get();
+
+  if (!::TrySubmitThreadpoolCallback(OnRequested, pointer, environment_))
     return nullptr;
 
-  return context.release();
+  requests_.push_back(std::move(context));
+
+  return pointer;
 }
 
 int AsyncDatagramSocket::EndRequest(AsyncContext* context, sockaddr* address,
@@ -250,7 +259,18 @@ int AsyncDatagramSocket::EndRequest(AsyncContext* context, sockaddr* address,
     *length = context->address_length;
   }
 
-  delete context;
+  lock_.Lock();
+  for (auto i = requests_.begin(), l = requests_.end(); i != l; ++i) {
+    if (i->get() == context) {
+      requests_.erase(i);
+
+      if (requests_.empty())
+        empty_.WakeAll();
+
+      break;
+    }
+  }
+  lock_.Unlock();
 
   if (!succeeded)
     return SOCKET_ERROR;
