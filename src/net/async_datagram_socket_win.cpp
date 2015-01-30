@@ -213,7 +213,7 @@ AsyncDatagramSocket::AsyncContext* AsyncDatagramSocket::DispatchRequest(
   if (!::InitOnceExecuteOnce(&init_once_, OnInitialize, this, nullptr))
     return nullptr;
 
-  auto  context = std::make_unique<AsyncContext>(this);
+  auto context = std::make_unique<AsyncContext>(this);
   if (context == nullptr) {
     SetLastError(E_OUTOFMEMORY);
     return nullptr;
@@ -305,6 +305,8 @@ void CALLBACK AsyncDatagramSocket::OnRequested(PTP_CALLBACK_INSTANCE instance,
 }
 
 void AsyncDatagramSocket::OnRequested(AsyncContext* context) {
+  madoka::concurrent::LockGuard guard(&lock_);
+
   DWORD bytes = 0;
   int result = 0;
   int error = ERROR_SUCCESS;
