@@ -26,7 +26,6 @@
     <ClInclude Include="include\madoka\concurrent\lock_guard.h" />
     <ClInclude Include="include\madoka\concurrent\read_write_lock.h" />
     <ClInclude Include="include\madoka\net\abstract_socket.h" />
-    <ClInclude Include="include\madoka\net\address_info.h" />
     <ClInclude Include="include\madoka\net\async_server_socket.h" />
     <ClInclude Include="include\madoka\net\async_socket.h" />
     <ClInclude Include="include\madoka\net\common.h" />
