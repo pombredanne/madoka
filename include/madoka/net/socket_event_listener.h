@@ -10,7 +10,6 @@ namespace net {
 
 class AsyncServerSocket;
 class AsyncSocket;
-class AsyncDatagramSocket;
 
 class SocketEventListener {
  public:
@@ -20,19 +19,14 @@ class SocketEventListener {
                           DWORD error) = 0;
 
   virtual void OnConnected(AsyncSocket* socket, DWORD error) = 0;
+
   virtual void OnReceived(AsyncSocket* socket, DWORD error, void* buffer,
                           int length) = 0;
+  virtual void OnReceivedFrom(AsyncSocket* socket, DWORD error, void* buffer,
+                              int length, sockaddr* from, int from_length) = 0;
   virtual void OnSent(AsyncSocket* socket, DWORD error, void* buffer,
                       int length) = 0;
-
-  virtual void OnReceived(AsyncDatagramSocket* socket, DWORD error,
-                          void* buffer, int length) = 0;
-  virtual void OnReceivedFrom(AsyncDatagramSocket* socket, DWORD error,
-                              void* buffer, int length, sockaddr* from,
-                              int from_length) = 0;
-  virtual void OnSent(AsyncDatagramSocket* socket, DWORD error, void* buffer,
-                      int length) = 0;
-  virtual void OnSentTo(AsyncDatagramSocket* socket, DWORD error, void* buffer,
+  virtual void OnSentTo(AsyncSocket* socket, DWORD error, void* buffer,
                         int length, sockaddr* to, int to_length) = 0;
 };
 
@@ -44,20 +38,16 @@ class SocketEventAdapter : public SocketEventListener {
                   DWORD error) MADOKA_OVERRIDE {}
 
   void OnConnected(AsyncSocket* socket, DWORD error) MADOKA_OVERRIDE {}
+
   void OnReceived(AsyncSocket* socket, DWORD error, void* buffer,
                   int length) MADOKA_OVERRIDE {}
-  void OnSent(AsyncSocket* socket, DWORD error, void* buffer,
-              int length) MADOKA_OVERRIDE {}
-
-  void OnReceived(AsyncDatagramSocket* socket, DWORD error, void* buffer,
-                  int length) MADOKA_OVERRIDE {}
-  void OnReceivedFrom(AsyncDatagramSocket* socket, DWORD error, void* buffer,
+  void OnReceivedFrom(AsyncSocket* socket, DWORD error, void* buffer,
                       int length, sockaddr* from,
                       int from_length) MADOKA_OVERRIDE {}
-  void OnSent(AsyncDatagramSocket* socket, DWORD error, void* buffer,
+  void OnSent(AsyncSocket* socket, DWORD error, void* buffer,
               int length) MADOKA_OVERRIDE {}
-  void OnSentTo(AsyncDatagramSocket* socket, DWORD error, void* buffer,
-                int length, sockaddr* to, int to_length) MADOKA_OVERRIDE {}
+  void OnSentTo(AsyncSocket* socket, DWORD error, void* buffer, int length,
+                sockaddr* to, int to_length) MADOKA_OVERRIDE {}
 };
 
 }  // namespace net

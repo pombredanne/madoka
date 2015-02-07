@@ -21,6 +21,8 @@ struct AsyncSocket::AsyncContext : OVERLAPPED, WSABUF {
         action(None),
         end_point(nullptr),
         flags(0),
+        address(),
+        address_length(sizeof(address)),
         listener(nullptr),
         event(NULL) {
   }
@@ -29,6 +31,8 @@ struct AsyncSocket::AsyncContext : OVERLAPPED, WSABUF {
   Action action;
   const addrinfo* end_point;
   DWORD flags;
+  sockaddr_storage address;
+  int address_length;
   SocketEventListener* listener;
   HANDLE event;
 };
@@ -73,8 +77,8 @@ void AsyncSocket::ConnectAsync(const addrinfo* end_points,
     listener->OnConnected(this, WSAEFAULT);
   else if (connected())
     listener->OnConnected(this, WSAEISCONN);
-  else if (DispatchRequest(Connecting, end_points, nullptr, 0, 0, listener,
-                           NULL) == nullptr)
+  else if (DispatchRequest(Connecting, end_points, nullptr, 0, 0, nullptr, 0,
+                           listener, NULL) == nullptr)
     listener->OnConnected(this, GetLastError());
 }
 
@@ -87,7 +91,8 @@ AsyncSocket::AsyncContext* AsyncSocket::BeginConnect(const addrinfo* end_points,
 
   cancel_connect_ = false;
 
-  return DispatchRequest(Connecting, end_points, nullptr, 0, 0, nullptr, event);
+  return DispatchRequest(Connecting, end_points, nullptr, 0, 0, nullptr, 0,
+                         nullptr, event);
 }
 
 bool AsyncSocket::EndConnect(AsyncContext* context) {
@@ -96,7 +101,7 @@ bool AsyncSocket::EndConnect(AsyncContext* context) {
   if (context->action != Connecting)
     return false;
 
-  int result = EndRequest(context);
+  int result = EndRequest(context, nullptr, nullptr);
   if (result == SOCKET_ERROR)
     return false;
 
@@ -114,8 +119,8 @@ void AsyncSocket::ReceiveAsync(void* buffer, int size, int flags,
     listener->OnReceived(this, E_POINTER, buffer, 0);
   if (!connected())
     listener->OnReceived(this, WSAENOTCONN, buffer, 0);
-  else if (DispatchRequest(Receiving, nullptr, buffer, size, flags, listener,
-                         NULL) == nullptr)
+  else if (DispatchRequest(Receiving, nullptr, buffer, size, flags, nullptr, 0,
+                           listener, NULL) == nullptr)
     listener->OnReceived(this, GetLastError(), buffer, 0);
 }
 
@@ -126,8 +131,8 @@ AsyncSocket::AsyncContext* AsyncSocket::BeginReceive(void* buffer, int size,
   if (!connected())
     return nullptr;
 
-  return DispatchRequest(Receiving, nullptr, buffer, size, flags, nullptr,
-                         event);
+  return DispatchRequest(Receiving, nullptr, buffer, size, flags, nullptr, 0,
+                         nullptr, event);
 }
 
 int AsyncSocket::EndReceive(AsyncContext* context) {
@@ -136,7 +141,39 @@ int AsyncSocket::EndReceive(AsyncContext* context) {
   if (context->action != Receiving)
     return SOCKET_ERROR;
 
-  return EndRequest(context);
+  return EndRequest(context, nullptr, nullptr);
+}
+
+void AsyncSocket::ReceiveFromAsync(void* buffer, int size, int flags,
+                                   SocketEventListener* listener) {
+  if (listener == nullptr)
+    listener->OnReceivedFrom(this, E_POINTER, buffer, size, nullptr, 0);
+  if (!bound())
+    listener->OnReceivedFrom(this, WSAEINVAL, buffer, size, nullptr, 0);
+  else if (DispatchRequest(ReceivingFrom, nullptr, buffer, size, flags, nullptr,
+                           0, listener, NULL) == nullptr)
+    listener->OnReceivedFrom(this, GetLastError(), buffer, size, nullptr, 0);
+}
+
+AsyncSocket::AsyncContext* AsyncSocket::BeginReceiveFrom(
+    void* buffer, int size, int flags, HANDLE event) {
+  if (event == NULL)
+    return nullptr;
+  if (!bound())
+    return nullptr;
+
+  return DispatchRequest(ReceivingFrom, nullptr, buffer, size, flags, nullptr,
+                         0, nullptr, event);
+}
+
+int AsyncSocket::EndReceiveFrom(AsyncContext* context, sockaddr* address,
+                                int* length) {
+  if (context == nullptr || context->socket != this)
+    return SOCKET_ERROR;
+  if (context->action != ReceivingFrom)
+    return SOCKET_ERROR;
+
+  return EndRequest(context, address, length);
 }
 
 void AsyncSocket::SendAsync(const void* buffer, int size, int flags,
@@ -146,7 +183,7 @@ void AsyncSocket::SendAsync(const void* buffer, int size, int flags,
   if (!connected())
     listener->OnSent(this, WSAENOTCONN, const_cast<void*>(buffer), 0);
   else if (DispatchRequest(Sending, nullptr, const_cast<void*>(buffer), size,
-                           flags, listener, NULL) == nullptr)
+                           flags, nullptr, 0, listener, NULL) == nullptr)
     listener->OnSent(this, GetLastError(), const_cast<void*>(buffer), 0);
 }
 
@@ -158,7 +195,7 @@ AsyncSocket::AsyncContext* AsyncSocket::BeginSend(const void* buffer, int size,
     return nullptr;
 
   return DispatchRequest(Sending, nullptr, const_cast<void*>(buffer), size,
-                         flags, nullptr, event);
+                         flags, nullptr, 0, nullptr, event);
 }
 
 int AsyncSocket::EndSend(AsyncContext* context) {
@@ -167,7 +204,43 @@ int AsyncSocket::EndSend(AsyncContext* context) {
   if (context->action != Sending)
     return SOCKET_ERROR;
 
-  return EndRequest(context);
+  return EndRequest(context, nullptr, nullptr);
+}
+
+void AsyncSocket::SendToAsync(const void* buffer, int size, int flags,
+                              const sockaddr* address, int length,
+                              SocketEventListener* listener) {
+  if (listener == nullptr)
+    listener->OnSentTo(this, E_POINTER, const_cast<void*>(buffer), size,
+                       const_cast<sockaddr*>(address), length);
+  if (!IsValid())
+    listener->OnSentTo(this, WSAENOTSOCK, const_cast<void*>(buffer), size,
+                       const_cast<sockaddr*>(address), length);
+  if (DispatchRequest(SendingTo, nullptr, const_cast<void*>(buffer), size,
+                      flags, address, length, listener, NULL) == nullptr)
+    listener->OnSentTo(this, GetLastError(), const_cast<void*>(buffer), size,
+                       const_cast<sockaddr*>(address), length);
+}
+
+AsyncSocket::AsyncContext* AsyncSocket::BeginSendTo(
+    const void* buffer, int size, int flags, const sockaddr* address,
+  int length, HANDLE event) {
+  if (event == NULL)
+    return nullptr;
+  if (!IsValid())
+    return nullptr;
+
+  return DispatchRequest(SendingTo, nullptr, const_cast<void*>(buffer), size,
+                         flags, address, length, nullptr, event);
+}
+
+int AsyncSocket::EndSendTo(AsyncContext* context) {
+  if (context == nullptr || context->socket != this)
+    return SOCKET_ERROR;
+  if (context->action != SendingTo)
+    return SOCKET_ERROR;
+
+  return EndRequest(context, nullptr, nullptr);
 }
 
 void AsyncSocket::CloseInternal() {
@@ -180,7 +253,8 @@ void AsyncSocket::CloseInternal() {
 
 AsyncSocket::AsyncContext* AsyncSocket::DispatchRequest(
     Action action,  const addrinfo* end_points, void* buffer, int size,
-    int flags, SocketEventListener* listener, HANDLE event) {
+    int flags, const sockaddr* address, int length,
+    SocketEventListener* listener, HANDLE event) {
   if (action != Connecting &&
       !::InitOnceExecuteOnce(&init_once_, OnInitialize, this, nullptr))
     return nullptr;
@@ -202,6 +276,11 @@ AsyncSocket::AsyncContext* AsyncSocket::DispatchRequest(
   context->listener = listener;
   context->event = event;
 
+  if (address != nullptr && length > 0) {
+    ::memmove(&context->address, address, length);
+    context->address_length = length;
+  }
+
   if (event != NULL && !::ResetEvent(event))
     return nullptr;
 
@@ -216,13 +295,19 @@ AsyncSocket::AsyncContext* AsyncSocket::DispatchRequest(
   return pointer;
 }
 
-int AsyncSocket::EndRequest(AsyncContext* context) {
+int AsyncSocket::EndRequest(AsyncContext* context, sockaddr* address,
+                            int* length) {
   if (context->event != NULL)
     ::WaitForSingleObject(context->event, INFINITE);
 
   DWORD bytes = 0;
   BOOL succeeded = ::GetOverlappedResult(reinterpret_cast<HANDLE>(descriptor_),
                                          context, &bytes, FALSE);
+  if (succeeded && address != nullptr && length != nullptr) {
+    if (*length >= context->address_length)
+      ::memmove(address, &context->address, context->address_length);
+    *length = context->address_length;
+  }
 
   lock_.Lock();
   for (auto i = requests_.begin(), l = requests_.end(); i != l; ++i) {
@@ -247,7 +332,20 @@ int AsyncSocket::DoAsyncConnect(AsyncContext* context) {
   if (cancel_connect_)
     return SOCKET_ERROR;
 
-  const addrinfo* end_point = context->end_point;
+  auto end_point = context->end_point;
+
+  switch (end_point->ai_socktype) {
+    case 0:
+    case SOCK_STREAM:
+    case SOCK_RDM:
+    case SOCK_SEQPACKET:
+      break;
+
+    default:
+      WSASetLastError(WSAEINVAL);
+      return SOCKET_ERROR;
+  }
+
   if (!Create(end_point))
     return SOCKET_ERROR;
 
@@ -308,21 +406,34 @@ void AsyncSocket::OnRequested(AsyncContext* context) {
   int result = 0;
   int error = ERROR_SUCCESS;
 
+  if (context->action != Connecting)
+    ::StartThreadpoolIo(io_);
+
   switch (context->action) {
     case Connecting:
       result = DoAsyncConnect(context);
       break;
 
     case Receiving:
-      ::StartThreadpoolIo(io_);
       result = ::WSARecv(descriptor_, context, 1, &bytes, &context->flags,
                          context, NULL);
       break;
 
+    case ReceivingFrom:
+      result = ::WSARecvFrom(descriptor_, context, 1, &bytes, &context->flags,
+                             reinterpret_cast<sockaddr*>(&context->address),
+                             &context->address_length, context, NULL);
+      break;
+
     case Sending:
-      ::StartThreadpoolIo(io_);
       result = ::WSASend(descriptor_, context, 1, &bytes, context->flags,
                          context, NULL);
+      break;
+
+    case SendingTo:
+      result = ::WSASendTo(descriptor_, context, 1, &bytes, context->flags,
+                           reinterpret_cast<sockaddr*>(&context->address),
+                           context->address_length, context, NULL);
       break;
 
     default:
@@ -331,7 +442,9 @@ void AsyncSocket::OnRequested(AsyncContext* context) {
 
   error = ::WSAGetLastError();
   if (result != 0 && error != WSA_IO_PENDING) {
-    ::CancelThreadpoolIo(io_);
+    if (io_ != nullptr)
+      ::CancelThreadpoolIo(io_);
+
     OnCompleted(context, error, 0);
   }
 }
@@ -379,12 +492,37 @@ void AsyncSocket::OnCompleted(AsyncContext* context, ULONG error,
         break;
       }
 
+      case ReceivingFrom: {
+        sockaddr_storage from = context->address;
+        int from_length = context->address_length;
+        int result = EndReceiveFrom(context, nullptr, nullptr);
+        if (result == SOCKET_ERROR && error == 0)
+          error = ::GetLastError();
+
+        listener->OnReceivedFrom(this, error, buffer, bytes,
+                                 reinterpret_cast<sockaddr*>(&from),
+                                 from_length);
+        break;
+      }
+
       case Sending: {
         int result = EndSend(context);
         if (result == SOCKET_ERROR && error == 0)
           error = ::GetLastError();
 
         listener->OnSent(this, error, buffer, bytes);
+        break;
+      }
+
+      case SendingTo: {
+        sockaddr_storage to = context->address;
+        int to_length = context->address_length;
+        int result = EndSendTo(context);
+        if (result == SOCKET_ERROR && error == 0)
+          error = ::GetLastError();
+
+        listener->OnSentTo(this, error, buffer, bytes,
+                           reinterpret_cast<sockaddr*>(&to), to_length);
         break;
       }
 

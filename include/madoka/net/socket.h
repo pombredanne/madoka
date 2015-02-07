@@ -1,9 +1,7 @@
-// Copyright (c) 2013 dacci.org
+// Copyright (c) 2015 dacci.org
 
 #ifndef MADOKA_NET_SOCKET_H_
 #define MADOKA_NET_SOCKET_H_
-
-#include <stdio.h>
 
 #include <madoka/net/abstract_socket.h>
 
@@ -12,21 +10,26 @@ namespace net {
 
 class Socket : public AbstractSocket {
  public:
-  Socket() : connected_() {
+  Socket() : connected_(false) {
   }
 
-  virtual ~Socket() {
-    Close();
+  Socket(int family, int type, int protocol) : connected_(false) {
+    Create(family, type, protocol);
   }
 
-  void Close() MADOKA_OVERRIDE {
-    connected_ = false;
-    AbstractSocket::Close();
+  bool Connect(const void* address, int length) {
+    bool succeeded = connect(descriptor_, static_cast<const sockaddr*>(address),
+                             length) == 0;
+    if (succeeded)
+      connected_ = true;
+
+    return succeeded;
   }
 
   bool Connect(const addrinfo* end_point) {
     if (connected_)
       return false;
+
     if (!Create(end_point))
       return false;
 
@@ -34,55 +37,48 @@ class Socket : public AbstractSocket {
   }
 
 #ifdef _WIN32
-#if ((NTDDI_VERSION >= NTDDI_WINXPSP2) || (_WIN32_WINNT >= 0x0502))
-
   bool Connect(const ADDRINFOW* end_point) {
     if (connected_)
       return false;
+
     if (!Create(end_point))
       return false;
 
     return Connect(end_point->ai_addr, end_point->ai_addrlen);
   }
-
-#endif  // ((NTDDI_VERSION >= NTDDI_WINXPSP2) || (_WIN32_WINNT >= 0x0502))
 #endif  // _WIN32
 
   bool Shutdown(int how) {
-    if (!IsValid())
-      return false;
+    bool succeeded = shutdown(descriptor_, how) == 0;
+    if (succeeded)
+      connected_ = false;
 
-    connected_ = false;
-    return ::shutdown(descriptor_, how) == 0;
+    return succeeded;
   }
 
   int Receive(void* buffer, int length, int flags) {
-    if (!IsValid() || !connected_ || buffer == NULL || length < 0)
-      return SOCKET_ERROR;
-    if (length == 0)
-      return 0;
+    return recv(descriptor_, static_cast<char*>(buffer), length, flags);
+  }
 
-    int result = ::recv(descriptor_, static_cast<char*>(buffer), length, flags);
-    if (result == 0)
-      connected_ = false;
-
-    return result;
+  int ReceiveFrom(void* buffer, int length, int flags, void* address,
+                  int* address_length) {
+    return recvfrom(descriptor_, static_cast<char*>(buffer), length, flags,
+                    static_cast<sockaddr*>(address), address_length);
   }
 
   int Send(const void* buffer, int length, int flags) {
-    if (!IsValid() || !connected_ || buffer == NULL || length < 0)
-      return SOCKET_ERROR;
-    if (length == 0)
-      return 0;
-
-    return ::send(descriptor_, static_cast<const char*>(buffer), length, flags);
+    return send(descriptor_, static_cast<const char*>(buffer), length, flags);
   }
 
-  bool GetRemoteEndPoint(sockaddr* end_point, int* length) {
-    if (!IsValid())
-      return false;
+  int SendTo(const void* buffer, int length, int flags, const void* address,
+             int address_length) {
+    return sendto(descriptor_, static_cast<const char*>(buffer), length, flags,
+                  static_cast<const sockaddr*>(address), address_length);
+  }
 
-    return ::getpeername(descriptor_, end_point, length) == 0;
+  bool GetRemoteEndPoint(void* address, int* length) {
+    return getpeername(descriptor_, static_cast<sockaddr*>(address),
+                       length) == 0;
   }
 
   bool connected() const {
@@ -97,21 +93,13 @@ class Socket : public AbstractSocket {
  private:
   friend class ServerSocket;
 
-  explicit Socket(SOCKET descriptor) : AbstractSocket(descriptor) {
-    connected_ = true;
-  }
-
-  bool Connect(const sockaddr* address, size_t length) {
-    if (connected_)
-      return false;
-    if (!IsValid())
-      return false;
-
-    connected_ = ::connect(descriptor_, address, static_cast<int>(length)) == 0;
-    if (!connected_)
-      Close();
-
-    return connected_;
+  explicit Socket(SOCKET descriptor) {
+    if (descriptor != INVALID_SOCKET) {
+      descriptor_ = descriptor;
+      connected_ = true;
+    } else {
+      connected_ = false;
+    }
   }
 
   bool connected_;

@@ -17,7 +17,6 @@ libmadoka_a_SOURCES += \
   src/concurrent/condition_variable_win.cpp \
   src/concurrent/critical_section_win.cpp \
   src/concurrent/read_write_lock_win.cpp \
-  src/net/async_datagram_socket_win.cpp \
   src/net/async_server_socket_win.cpp \
   src/net/async_socket_win.cpp
 else
