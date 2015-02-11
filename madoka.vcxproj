@@ -25,6 +25,10 @@
     <ClInclude Include="include\madoka\concurrent\lockable.h" />
     <ClInclude Include="include\madoka\concurrent\lock_guard.h" />
     <ClInclude Include="include\madoka\concurrent\read_write_lock.h" />
+    <ClInclude Include="include\madoka\io\abstract_stream.h" />
+    <ClInclude Include="include\madoka\io\handle_stream.h" />
+    <ClInclude Include="include\madoka\io\pipe_stream.h" />
+    <ClInclude Include="include\madoka\io\stream.h" />
     <ClInclude Include="include\madoka\net\abstract_socket.h" />
     <ClInclude Include="include\madoka\net\async_server_socket.h" />
     <ClInclude Include="include\madoka\net\async_socket.h" />
@@ -35,12 +39,17 @@
     <ClInclude Include="include\madoka\net\socket_event_listener.h" />
     <ClInclude Include="include\madoka\net\winsock.h" />
     <ClInclude Include="src\concurrent\internals.h" />
+    <ClInclude Include="src\io\abstract_stream_impl.h" />
+    <ClInclude Include="src\io\handle_stream_impl.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\concurrent\condition_variable_win.cpp" />
     <ClCompile Include="src\concurrent\critical_section_win.cpp" />
     <ClCompile Include="src\concurrent\lock_guard.cpp" />
     <ClCompile Include="src\concurrent\read_write_lock_win.cpp" />
+    <ClCompile Include="src\io\abstract_stream_win.cpp" />
+    <ClCompile Include="src\io\handle_stream_win.cpp" />
+    <ClCompile Include="src\io\pipe_stream_win.cpp" />
     <ClCompile Include="src\net\async_server_socket_win.cpp" />
     <ClCompile Include="src\net\async_socket_win.cpp" />
   </ItemGroup>
