@@ -37,7 +37,7 @@ class ReadWriteLock : public Lockable {
 
   LockImpl* lock_;
 
-  DISALLOW_COPY_AND_ASSIGN(ReadWriteLock);
+  MADOKA_DISALLOW_COPY_AND_ASSIGN(ReadWriteLock);
 };
 
 class ReadLock : public Lockable {
@@ -55,7 +55,7 @@ class ReadLock : public Lockable {
  private:
   ReadWriteLock* const lock_;
 
-  DISALLOW_COPY_AND_ASSIGN(ReadLock);
+  MADOKA_DISALLOW_COPY_AND_ASSIGN(ReadLock);
 };
 
 class WriteLock : public Lockable {
@@ -73,7 +73,7 @@ class WriteLock : public Lockable {
  private:
   ReadWriteLock* const lock_;
 
-  DISALLOW_COPY_AND_ASSIGN(WriteLock);
+  MADOKA_DISALLOW_COPY_AND_ASSIGN(WriteLock);
 };
 
 }  // namespace concurrent

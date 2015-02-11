@@ -31,7 +31,7 @@ class ConditionVariable {
  private:
   VariableImpl* variable_;
 
-  DISALLOW_COPY_AND_ASSIGN(ConditionVariable);
+  MADOKA_DISALLOW_COPY_AND_ASSIGN(ConditionVariable);
 };
 
 }  // namespace concurrent

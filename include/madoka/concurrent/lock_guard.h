@@ -30,7 +30,7 @@ class LockGuard {
   ReadWriteLock* const rw_lock_;
   Mode mode_;
 
-  DISALLOW_COPY_AND_ASSIGN(LockGuard);
+  MADOKA_DISALLOW_COPY_AND_ASSIGN(LockGuard);
 };
 
 }  // namespace concurrent

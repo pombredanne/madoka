@@ -25,7 +25,7 @@ class CriticalSection : public Lockable {
 
   MutexImpl* mutex_;
 
-  DISALLOW_COPY_AND_ASSIGN(CriticalSection);
+  MADOKA_DISALLOW_COPY_AND_ASSIGN(CriticalSection);
 };
 
 }  // namespace concurrent

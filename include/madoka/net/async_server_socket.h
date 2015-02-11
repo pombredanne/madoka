@@ -68,7 +68,7 @@ class AsyncServerSocket : public ServerSocket {
   madoka::concurrent::ConditionVariable empty_;
   madoka::concurrent::CriticalSection lock_;
 
-  DISALLOW_COPY_AND_ASSIGN(AsyncServerSocket);
+  MADOKA_DISALLOW_COPY_AND_ASSIGN(AsyncServerSocket);
 };
 
 }  // namespace net

@@ -121,7 +121,7 @@ class AbstractSocket {
  private:
   bool bound_;
 
-  DISALLOW_COPY_AND_ASSIGN(AbstractSocket);
+  MADOKA_DISALLOW_COPY_AND_ASSIGN(AbstractSocket);
 };
 
 }  // namespace net

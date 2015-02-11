@@ -104,7 +104,7 @@ class Socket : public AbstractSocket {
 
   bool connected_;
 
-  DISALLOW_COPY_AND_ASSIGN(Socket);
+  MADOKA_DISALLOW_COPY_AND_ASSIGN(Socket);
 };
 
 }  // namespace net

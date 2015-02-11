@@ -35,7 +35,7 @@ class ServerSocket : public AbstractSocket {
   }
 
  private:
-  DISALLOW_COPY_AND_ASSIGN(ServerSocket);
+  MADOKA_DISALLOW_COPY_AND_ASSIGN(ServerSocket);
 };
 
 }  // namespace net

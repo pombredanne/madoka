@@ -141,7 +141,7 @@ class ResolverBase {
 
   int error_;
 
-  DISALLOW_COPY_AND_ASSIGN(ResolverBase);
+  MADOKA_DISALLOW_COPY_AND_ASSIGN(ResolverBase);
 };
 
 class Resolver : public ResolverBase<addrinfo, std::string> {
@@ -170,7 +170,7 @@ class Resolver : public ResolverBase<addrinfo, std::string> {
     return value.c_str();
   }
 
-  DISALLOW_COPY_AND_ASSIGN(Resolver);
+  MADOKA_DISALLOW_COPY_AND_ASSIGN(Resolver);
 };
 
 #ifdef _WIN32
@@ -201,7 +201,7 @@ class ResolverW : public ResolverBase<ADDRINFOW, std::wstring> {
     return value.c_str();
   }
 
-  DISALLOW_COPY_AND_ASSIGN(ResolverW);
+  MADOKA_DISALLOW_COPY_AND_ASSIGN(ResolverW);
 };
 
 #endif  // _WIN32

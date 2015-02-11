@@ -47,7 +47,7 @@ class WinSock : public WSADATA {
  private:
   int error_;
 
-  DISALLOW_COPY_AND_ASSIGN(WinSock);
+  MADOKA_DISALLOW_COPY_AND_ASSIGN(WinSock);
 };
 
 }  // namespace net
