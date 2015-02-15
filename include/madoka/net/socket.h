@@ -86,13 +86,6 @@ class Socket : public AbstractSocket {
   }
 
  protected:
-  void set_connected(bool connected) {
-    connected_ = connected;
-  }
-
- private:
-  friend class ServerSocket;
-
   explicit Socket(SOCKET descriptor) {
     if (descriptor != INVALID_SOCKET) {
       descriptor_ = descriptor;
@@ -101,6 +94,13 @@ class Socket : public AbstractSocket {
       connected_ = false;
     }
   }
+
+  void set_connected(bool connected) {
+    connected_ = connected;
+  }
+
+ private:
+  friend class ServerSocket;
 
   bool connected_;
 

@@ -37,6 +37,7 @@
     <ClInclude Include="include\madoka\net\server_socket.h" />
     <ClInclude Include="include\madoka\net\socket.h" />
     <ClInclude Include="include\madoka\net\socket_event_listener.h" />
+    <ClInclude Include="include\madoka\net\socket_stream.h" />
     <ClInclude Include="include\madoka\net\winsock.h" />
     <ClInclude Include="src\concurrent\internals.h" />
     <ClInclude Include="src\io\abstract_stream_impl.h" />
@@ -52,6 +53,7 @@
     <ClCompile Include="src\io\pipe_stream_win.cpp" />
     <ClCompile Include="src\net\async_server_socket_win.cpp" />
     <ClCompile Include="src\net\async_socket_win.cpp" />
+    <ClCompile Include="src\net\socket_stream_win.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{849CC6CC-460E-45DE-8EA5-4DDA0F25837D}</ProjectGuid>
