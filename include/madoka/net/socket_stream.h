@@ -87,6 +87,7 @@ class SocketStream : public Socket, public madoka::io::AbstractStream {
                   AbstractStream::Listener* listener) override;
 
  private:
+  friend class AsyncServerSocket;
   friend class ServerSocket;
 
   explicit SocketStream(SOCKET descriptor);

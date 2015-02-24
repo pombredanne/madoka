@@ -1,103 +1,169 @@
-// Copyright (c) 2014 dacci.org
+// Copyright (c) 2015 dacci.org
 
 #include "madoka/net/async_server_socket.h"
 
-#include <assert.h>
-
-#include <memory>
-#include <utility>
-
 #include "madoka/concurrent/lock_guard.h"
-#include "madoka/net/async_socket.h"
-#include "madoka/net/socket_event_listener.h"
+
+#ifndef HRESULT_FROM_LAST_ERROR
+#define HRESULT_FROM_LAST_ERROR() HRESULT_FROM_WIN32(GetLastError())
+#endif  // HRESULT_FROM_LAST_ERROR
 
 namespace madoka {
 namespace net {
 
 struct AsyncServerSocket::AsyncContext : OVERLAPPED {
-  explicit AsyncContext(AsyncServerSocket* server)
-      : OVERLAPPED(), server(server), bytes(0), listener(nullptr), event(NULL) {
-  }
-
   AsyncServerSocket* server;
-  std::unique_ptr<AsyncSocket> client;
+  SOCKET socket;
   std::unique_ptr<char[]> buffer;
-  DWORD bytes;
-  SocketEventListener* listener;
-  HANDLE event;
+  Listener* listener;
 };
 
-PTP_CALLBACK_ENVIRON AsyncServerSocket::environment_ = NULL;
+AsyncServerSocket::AsyncServerSocket()
+    : old_descriptor_(INVALID_SOCKET), io_(nullptr) {
+}
 
-AsyncServerSocket::AsyncServerSocket() : io_() {
-  ::InitOnceInitialize(&init_once_);
+AsyncServerSocket::AsyncServerSocket(int family, int type, int protocol)
+    : old_descriptor_(INVALID_SOCKET), io_(nullptr) {
+  Create(family, type, protocol);
 }
 
 AsyncServerSocket::~AsyncServerSocket() {
   Close();
-  CloseInternal();
+  Reset();
 
   madoka::concurrent::LockGuard guard(&lock_);
   while (!requests_.empty())
     empty_.Sleep(&lock_);
 }
 
-void AsyncServerSocket::Close() {
-  ServerSocket::Close();
+void AsyncServerSocket::AcceptAsync(Listener* listener) {
+  HRESULT result = S_OK;
 
-  ::InitOnceInitialize(&init_once_);
-}
-
-PTP_CALLBACK_ENVIRON AsyncServerSocket::GetCallbackEnvironment() {
-  return environment_;
-}
-
-void AsyncServerSocket::SetCallbackEnvironment(
-    PTP_CALLBACK_ENVIRON environment) {
-  environment_ = environment;
-}
-
-void AsyncServerSocket::AcceptAsync(SocketEventListener* listener) {
   if (listener == nullptr)
-    listener->OnAccepted(this, nullptr, E_POINTER);
-  if (!IsValid())
-    listener->OnAccepted(this, nullptr, WSAENOTSOCK);
+    result = E_INVALIDARG;
   else if (!bound())
-    listener->OnAccepted(this, nullptr, WSAEINVAL);
-  else if (DispatchRequest(listener, NULL) == nullptr)
-    listener->OnAccepted(this, nullptr, GetLastError());
+    result = __HRESULT_FROM_WIN32(WSAEINVAL);
+  else if (!IsValid())
+    result = __HRESULT_FROM_WIN32(WSAENOTSOCK);
+
+  if (SUCCEEDED(result)) {
+    auto context = CreateContext(listener, NULL);
+    if (context != nullptr)
+      result = DispatchRequest(std::move(context));
+    else
+      result = E_OUTOFMEMORY;
+  }
+
+  if (FAILED(result))
+    listener->OnAccepted(this, result, nullptr);
 }
 
 AsyncServerSocket::AsyncContext* AsyncServerSocket::BeginAccept(HANDLE event) {
   if (event == NULL)
     return nullptr;
-  if (!IsValid() || !bound())
+  if (!bound())
+    return nullptr;
+  if (!IsValid())
     return nullptr;
 
-  return DispatchRequest(nullptr, event);
+  auto context = CreateContext(nullptr, event);
+  if (context == nullptr)
+    return nullptr;
+
+  ResetEvent(event);
+
+  auto pointer = context.get();
+  HRESULT result = DispatchRequest(std::move(context));
+  if (FAILED(result))
+    return nullptr;
+
+  return pointer;
 }
 
-AsyncSocket* AsyncServerSocket::EndAccept(AsyncContext* context) {
-  if (context == nullptr || context->server != this)
-    return nullptr;
-
-  if (context->event != NULL)
-    ::WaitForSingleObject(context->event, INFINITE);
-
-  BOOL succeeded = ::GetOverlappedResult(
-      reinterpret_cast<HANDLE>(context->client->descriptor_), context,
-      &context->bytes, FALSE);
-  AsyncSocket* client = nullptr;
-  if (succeeded &&
-      context->client->SetOption(SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT,
-                                 descriptor_)) {
-    client = context->client.release();
-    client->set_connected(true);
+void AsyncServerSocket::Reset() {
+  if (io_ != nullptr) {
+    WaitForThreadpoolIoCallbacks(io_, FALSE);
+    CloseThreadpoolIo(io_);
+    io_ = nullptr;
   }
 
-  lock_.Lock();
+  old_descriptor_ = INVALID_SOCKET;
+}
+
+HRESULT AsyncServerSocket::EndAccept(AsyncContext* context, SOCKET* socket) {
+  if (context == nullptr || socket == nullptr)
+    return E_INVALIDARG;
+  if (context->server != this)
+    return E_HANDLE;
+
+  HRESULT result = S_OK;
+
+  do {
+    if (context->hEvent &&
+        WaitForSingleObject(context->hEvent, INFINITE) != WAIT_OBJECT_0) {
+      result = HRESULT_FROM_LAST_ERROR();
+      break;
+    }
+
+    DWORD length, flags;
+    if (!WSAGetOverlappedResult(descriptor_, context, &length, TRUE, &flags)) {
+      result = HRESULT_FROM_LAST_ERROR();
+      break;
+    }
+
+    bool succeeded = setsockopt(context->socket,
+                                SOL_SOCKET,
+                                SO_UPDATE_ACCEPT_CONTEXT,
+                                reinterpret_cast<char*>(&descriptor_),
+                                sizeof(descriptor_)) == 0;
+    if (!succeeded) {
+      result = HRESULT_FROM_LAST_ERROR();
+      break;
+    }
+
+    *socket = context->socket;
+    context->socket = INVALID_SOCKET;
+  } while (false);
+
+  DeleteContext(context);
+
+  return result;
+}
+
+std::unique_ptr<AsyncServerSocket::AsyncContext>
+    AsyncServerSocket::CreateContext(Listener* listener, HANDLE event) {
+  auto context = std::make_unique<AsyncContext>();
+  if (context != nullptr) {
+    memset(static_cast<OVERLAPPED*>(context.get()), 0, sizeof(OVERLAPPED));
+    context->server = this;
+    context->socket = INVALID_SOCKET;
+    context->listener = listener;
+    context->hEvent = event;
+  }
+
+  return context;
+}
+
+HRESULT AsyncServerSocket::DispatchRequest(
+    std::unique_ptr<AsyncContext>&& context) {  // NOLINT(build/c++11)
+  madoka::concurrent::LockGuard guard(&lock_);
+
+  if (!TrySubmitThreadpoolCallback(OnRequested, context.get(), nullptr))
+    return HRESULT_FROM_LAST_ERROR();
+
+  requests_.push_back(std::move(context));
+
+  return S_OK;
+}
+
+void AsyncServerSocket::DeleteContext(AsyncContext* context) {
+  madoka::concurrent::LockGuard guard(&lock_);
+
   for (auto i = requests_.begin(), l = requests_.end(); i != l; ++i) {
     if (i->get() == context) {
+      if (context->socket != INVALID_SOCKET)
+        closesocket(context->socket);
+
       requests_.erase(i);
 
       if (requests_.empty())
@@ -106,134 +172,104 @@ AsyncSocket* AsyncServerSocket::EndAccept(AsyncContext* context) {
       break;
     }
   }
-  lock_.Unlock();
-
-  return client;
-}
-
-void AsyncServerSocket::CloseInternal() {
-  if (io_ != NULL) {
-    ::WaitForThreadpoolIoCallbacks(io_, FALSE);
-    ::CloseThreadpoolIo(io_);
-    io_ = NULL;
-  }
-}
-
-AsyncServerSocket::AsyncContext* AsyncServerSocket::DispatchRequest(
-    SocketEventListener* listener, HANDLE event) {
-  if (!::InitOnceExecuteOnce(&init_once_, OnInitialize, this, nullptr))
-    return nullptr;
-
-  auto context = std::make_unique<AsyncContext>(this);
-  if (context == nullptr) {
-    SetLastError(E_OUTOFMEMORY);
-    return nullptr;
-  }
-
-  context->client.reset(new AsyncSocket());
-  if (context->client == nullptr) {
-    SetLastError(E_OUTOFMEMORY);
-    return nullptr;
-  }
-
-  context->buffer.reset(new char[(sizeof(sockaddr_storage) + 16) * 2]);
-  if (context->buffer == nullptr) {
-    SetLastError(E_OUTOFMEMORY);
-    return nullptr;
-  }
-
-  if (!context->client->Create(protocol_info_.iAddressFamily,
-                               protocol_info_.iSocketType,
-                               protocol_info_.iProtocol))
-    return nullptr;
-
-  context->listener = listener;
-  context->event = event;
-
-  if (event != NULL && !::ResetEvent(event))
-    return nullptr;
-
-  madoka::concurrent::LockGuard guard(&lock_);
-  auto pointer = context.get();
-
-  if (!::TrySubmitThreadpoolCallback(OnRequested, pointer, environment_))
-    return nullptr;
-
-  requests_.push_back(std::move(context));
-
-  return pointer;
-}
-
-BOOL CALLBACK AsyncServerSocket::OnInitialize(INIT_ONCE* init_once, void* param,
-                                              void** context) {
-  return static_cast<AsyncServerSocket*>(param)->OnInitialize(context);
-}
-
-BOOL AsyncServerSocket::OnInitialize(void** context) {
-  if (!IsValid())
-    return FALSE;
-
-  CloseInternal();
-  assert(io_ == NULL);
-
-  io_ = ::CreateThreadpoolIo(reinterpret_cast<HANDLE>(descriptor_),
-                              OnCompleted, this, environment_);
-  if (io_ == NULL)
-    return FALSE;
-
-  if (!GetOption(SOL_SOCKET, SO_PROTOCOL_INFO, &protocol_info_))
-    return FALSE;
-
-  return TRUE;
 }
 
 void CALLBACK AsyncServerSocket::OnRequested(PTP_CALLBACK_INSTANCE instance,
                                              void* param) {
-  AsyncContext* context = static_cast<AsyncContext*>(param);
+  auto context = static_cast<AsyncContext*>(param);
   context->server->OnRequested(context);
 }
 
 void AsyncServerSocket::OnRequested(AsyncContext* context) {
-  madoka::concurrent::LockGuard guard(&lock_);
+  HRESULT result = S_OK;
 
-  ::StartThreadpoolIo(io_);
-  BOOL succeeded = ::AcceptEx(descriptor_,
-                              context->client->descriptor_,
-                              context->buffer.get(),
-                              0,
-                              sizeof(sockaddr_storage) + 16,
-                              sizeof(sockaddr_storage) + 16,
-                              &context->bytes,
-                              context);
-  int error = ::WSAGetLastError();
+  do {
+    madoka::concurrent::LockGuard guard(&lock_);
 
-  if (!succeeded && error != ERROR_IO_PENDING) {
-    ::CancelThreadpoolIo(io_);
-    OnCompleted(context, error);
-  }
+    if (descriptor_ == old_descriptor_)
+      break;
+
+    Reset();
+
+    if (!GetOption(SOL_SOCKET, SO_PROTOCOL_INFO, &protocol_)) {
+      result = HRESULT_FROM_LAST_ERROR();
+      break;
+    }
+
+    io_ = CreateThreadpoolIo(reinterpret_cast<HANDLE>(descriptor_),
+                             OnCompleted, this, nullptr);
+    if (io_ == nullptr) {
+      result = HRESULT_FROM_LAST_ERROR();
+      break;
+    }
+
+    old_descriptor_ = descriptor_;
+  } while (false);
+
+  do {
+    if (FAILED(result))
+      break;
+
+    context->socket = socket(protocol_.iAddressFamily, protocol_.iSocketType,
+                             protocol_.iProtocol);
+    if (context->socket == INVALID_SOCKET) {
+      result = HRESULT_FROM_LAST_ERROR();
+      break;
+    }
+
+    DWORD address_length = sizeof(sockaddr_storage) + 16;
+
+    context->buffer = std::make_unique<char[]>(address_length * 2);
+    if (context->buffer == nullptr) {
+      result = E_OUTOFMEMORY;
+      break;
+    }
+
+    StartThreadpoolIo(io_);
+
+    BOOL succeeded = AcceptEx(descriptor_, context->socket,
+                              context->buffer.get(), 0, address_length,
+                              address_length, nullptr, context);
+    DWORD error = GetLastError();
+    if (!succeeded && error != ERROR_IO_PENDING) {
+      result = __HRESULT_FROM_WIN32(error);
+      CancelThreadpoolIo(io_);
+      break;
+    }
+  } while (false);
+
+  if (FAILED(result))
+    OnCompleted(context, result, 0);
 }
 
 void CALLBACK AsyncServerSocket::OnCompleted(PTP_CALLBACK_INSTANCE instance,
-                                             void* context, void* overlapped,
-                                             ULONG error, ULONG_PTR bytes,
+                                             void* param, void* overlapped,
+                                             ULONG error, ULONG_PTR length,
                                              PTP_IO io) {
-  static_cast<AsyncServerSocket*>(context)->OnCompleted(
-      static_cast<AsyncContext*>(static_cast<OVERLAPPED*>(overlapped)), error);
+  auto context =
+      static_cast<AsyncContext*>(static_cast<OVERLAPPED*>(overlapped));
+  context->server->OnCompleted(context, __HRESULT_FROM_WIN32(error), length);
 }
 
-void AsyncServerSocket::OnCompleted(AsyncContext* context, ULONG error) {
-  if (context->listener != nullptr) {
-    SocketEventListener* listener = context->listener;
-    AsyncSocket* client = EndAccept(context);
-    if (client == nullptr && error == 0)
-      error = ::GetLastError();
+void AsyncServerSocket::OnCompleted(AsyncContext* context, HRESULT result,
+                                    ULONG_PTR length) {
+  {
+    madoka::concurrent::LockGuard guard(&lock_);
 
-    listener->OnAccepted(this, client, error);
-  } else if (context->event != NULL) {
-    ::SetEvent(context->event);
-  } else {
-    assert(false);
+    bool found = false;
+    for (auto& queued : requests_) {
+      if (queued.get() == context) {
+        found = true;
+        break;
+      }
+    }
+    if (!found || context->listener == nullptr)
+      return;
   }
+
+  context->listener->OnAccepted(this, result, context);
+
+  DeleteContext(context);
 }
 
 }  // namespace net

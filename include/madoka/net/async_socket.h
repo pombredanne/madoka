@@ -69,10 +69,13 @@ class AsyncSocket : public Socket {
 
  private:
   friend class AsyncServerSocket;
+  friend class ServerSocket;
 
   enum Action {
     None, Connecting, Receiving, ReceivingFrom, Sending, SendingTo
   };
+
+  explicit AsyncSocket(SOCKET descriptor);
 
   void CloseInternal();
 

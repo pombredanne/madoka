@@ -243,6 +243,11 @@ int AsyncSocket::EndSendTo(AsyncContext* context) {
   return EndRequest(context, nullptr, nullptr);
 }
 
+AsyncSocket::AsyncSocket(SOCKET descriptor)
+    : Socket(descriptor), io_(), cancel_connect_(false) {
+  ::InitOnceInitialize(&init_once_);
+}
+
 void AsyncSocket::CloseInternal() {
   if (io_ != NULL) {
     ::WaitForThreadpoolIoCallbacks(io_, FALSE);
