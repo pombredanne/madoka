@@ -8,10 +8,14 @@
 #endif  // _MSC_VER
 
 #ifndef MADOKA_DEPRECATED
-#  if defined(_MSC_VER)
-#    define MADOKA_DEPRECATED __declspec(deprecated)
-#  elif defined(__GNUC__)
-#    define MADOKA_DEPRECATED __attribute__((deprecated))
+#  ifndef MADOKA_IMPLEMENTATION
+#    if defined(_MSC_VER)
+#      define MADOKA_DEPRECATED __declspec(deprecated)
+#    elif defined(__GNUC__)
+#      define MADOKA_DEPRECATED __attribute__((deprecated))
+#    else
+#      define MADOKA_DEPRECATED
+#    endif
 #  else
 #    define MADOKA_DEPRECATED
 #  endif
