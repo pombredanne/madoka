@@ -6,108 +6,117 @@
 #include <madoka/net/common.h>
 
 #ifndef _WIN32
-  #error The AsyncSocket supports Windows platforms only.
+#  error The AsyncSocket supports Windows platforms only.
 #endif  // _WIN32
 
 #if _WIN32_WINNT < 0x0600
-  #error The AsyncSocket requires the thread pool API.
+#  error The AsyncSocket requires the thread pool API.
 #endif  // _WIN32_WINNT < 0x0600
 
-#include <madoka/concurrent/condition_variable.h>
 #include <madoka/concurrent/critical_section.h>
 #include <madoka/net/socket.h>
 
+#include <list>
 #include <memory>
-#include <vector>
 
 namespace madoka {
 namespace net {
 
-class SocketEventListener;
-
 class AsyncSocket : public Socket {
  public:
-  struct AsyncContext;
+  struct Context;
+
+  class Listener {
+   public:
+    virtual ~Listener() {}
+
+    virtual void OnConnected(AsyncSocket* socket, HRESULT result,
+                             const addrinfo* end_point) = 0;
+    virtual void OnReceived(AsyncSocket* socket, HRESULT result, void* buffer,
+                            int length, int flags) = 0;
+    virtual void OnReceivedFrom(AsyncSocket* socket, HRESULT result,
+                                void* buffer, int length, int flags,
+                                const sockaddr* address,
+                                int address_length) = 0;
+    virtual void OnSent(AsyncSocket* socket, HRESULT result, void* buffer,
+                        int length) = 0;
+    virtual void OnSentTo(AsyncSocket* socket, HRESULT result, void* buffer,
+                          int length, const sockaddr* address,
+                          int address_length) = 0;
+  };
 
   AsyncSocket();
-  virtual ~AsyncSocket();
+  AsyncSocket(int family, int type, int protocol);
 
-  void Close() MADOKA_OVERRIDE;
+  ~AsyncSocket();
+
+  void Close() override;
 
   static PTP_CALLBACK_ENVIRON GetCallbackEnvironment();
   static void SetCallbackEnvironment(PTP_CALLBACK_ENVIRON environment);
 
-  // Connects to a specified address asynchronously. The process will complete
-  // when any connection attempt succeeds or all attempts fail.
-  void ConnectAsync(const addrinfo* end_points, SocketEventListener* listener);
-  AsyncContext* BeginConnect(const addrinfo* end_points, HANDLE event);
-  bool EndConnect(AsyncContext* context);
+  void ConnectAsync(const addrinfo* end_point, Listener* listener);
+  Context* BeginConnect(const addrinfo* end_point, HANDLE event);
+  HRESULT EndConnect(Context* context);
 
-  void ReceiveAsync(void* buffer, int size, int flags,
-                    SocketEventListener* listener);
-  AsyncContext* BeginReceive(void* buffer, int size, int flags, HANDLE event);
-  int EndReceive(AsyncContext* context);
+  void ReceiveAsync(void* buffer, int length, int flags, Listener* listener);
+  Context* BeginReceive(void* buffer, int length, int flags, HANDLE event);
+  int EndReceive(Context* context, HRESULT* result);
+  int EndReceive(Context* context) {
+    HRESULT result;
+    return EndReceive(context, &result);
+  }
 
-  void ReceiveFromAsync(void* buffer, int size, int flags,
-                        SocketEventListener* listener);
-  AsyncContext* BeginReceiveFrom(void* buffer, int size, int flags,
-                                 HANDLE event);
-  int EndReceiveFrom(AsyncContext* context, sockaddr* address, int* length);
+  void ReceiveFromAsync(void* buffer, int length, int flags,
+                        Listener* listener);
+  Context* BeginReceiveFrom(void* buffer, int length, int flags, HANDLE event);
+  int EndReceiveFrom(Context* context, void* address, int* length);
 
-  void SendAsync(const void* buffer, int size, int flags,
-                 SocketEventListener* listener);
-  AsyncContext* BeginSend(const void* buffer, int size, int flags,
-                          HANDLE event);
-  int EndSend(AsyncContext* context);
+  void SendAsync(const void* buffer, int length, int flags, Listener* listener);
+  Context* BeginSend(const void* buffer, int length, int flags, HANDLE event);
+  int EndSend(Context* context, HRESULT* result);
 
-  void SendToAsync(const void* buffer, int size, int flags,
-                   const sockaddr* address, int length,
-                   SocketEventListener* listener);
-  AsyncContext* BeginSendTo(const void* buffer, int size, int flags,
-                            const sockaddr* address, int length, HANDLE event);
-  int EndSendTo(AsyncContext* context);
+  int EndSend(Context* context) {
+    HRESULT result;
+    return EndSend(context, &result);
+  }
+
+  void SendToAsync(const void* buffer, int length, int flags,
+                   const void* address, int address_length, Listener* listener);
+  Context* BeginSendTo(const void* buffer, int length, int flags,
+                       const void* address, int address_length, HANDLE event);
+  int EndSendTo(Context* context, HRESULT* result);
+
+  int EndSendTo(Context* context) {
+    HRESULT result;
+    return EndSendTo(context, &result);
+  }
 
  private:
-  friend class AsyncServerSocket;
-  friend class ServerSocket;
+  static std::unique_ptr<Context> CreateContext(
+      int request, const addrinfo* end_point, void* buffer, int length,
+      DWORD flags, const void* address, int address_length,
+      Listener* listener, HANDLE event);
+  HRESULT RequestAsync(std::unique_ptr<Context>&& context);
+  Context* BeginRequest(std::unique_ptr<Context>&& context);
 
-  enum Action {
-    None, Connecting, Receiving, ReceivingFrom, Sending, SendingTo
-  };
+  static void CALLBACK OnRequested(PTP_CALLBACK_INSTANCE callback,
+                                   void* instance, PTP_WORK work);
+  void OnRequested(PTP_WORK work);
 
-  explicit AsyncSocket(SOCKET descriptor);
-
-  void CloseInternal();
-
-  AsyncContext* DispatchRequest(Action action, const addrinfo* end_points,
-                                void* buffer, int size, int flags,
-                                const sockaddr* address, int length,
-                                SocketEventListener* listener, HANDLE event);
-  int EndRequest(AsyncContext* context, sockaddr* address, int* length);
-
-  int DoAsyncConnect(AsyncContext* context);
-
-  static BOOL CALLBACK OnInitialize(INIT_ONCE* init_once, void* param,
-                                    void** context);
-  BOOL OnInitialize(void** context);
-
-  static void CALLBACK OnRequested(PTP_CALLBACK_INSTANCE instance, void* param);
-  void OnRequested(AsyncContext* context);
-
-  static void CALLBACK OnCompleted(PTP_CALLBACK_INSTANCE instance,
-                                   void* context, void* overlapped, ULONG error,
-                                   ULONG_PTR bytes, PTP_IO io);
-  void OnCompleted(AsyncContext* context, ULONG error, ULONG_PTR bytes);
+  static void CALLBACK OnCompleted(PTP_CALLBACK_INSTANCE callback,
+                                   void* instance, void* overlapped,
+                                   ULONG error, ULONG_PTR bytes, PTP_IO io);
+  void OnCompleted(std::unique_ptr<Context>&& context, HRESULT result,
+                   int length);
 
   static PTP_CALLBACK_ENVIRON environment_;
-  static LPFN_CONNECTEX ConnectEx;
-  INIT_ONCE init_once_;
-  PTP_IO io_;
-  bool cancel_connect_;
 
-  std::vector<std::unique_ptr<AsyncContext>> requests_;
-  madoka::concurrent::ConditionVariable empty_;
+  PTP_WORK work_;
   madoka::concurrent::CriticalSection lock_;
+  std::list<std::unique_ptr<Context>> requests_;
+  bool cancel_connect_;
+  PTP_IO io_;
 
   MADOKA_DISALLOW_COPY_AND_ASSIGN(AsyncSocket);
 };

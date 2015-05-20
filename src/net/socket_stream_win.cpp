@@ -95,7 +95,7 @@ HRESULT SocketStream::EndConnect(AsyncContext* context,
   if (WaitForSingleObject(context->hEvent, INFINITE) == WAIT_OBJECT_0 &&
       WSAGetOverlappedResult(descriptor_, context, &length, TRUE, &flags)) {
     if (SetOption(SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT, nullptr, 0))
-      set_connected(true);
+      connected_ = true;
     else
       result = HRESULT_FROM_LAST_ERROR();
 
@@ -136,7 +136,7 @@ HRESULT SocketStream::EndConnect(AsyncContext* context,
   if (WaitForSingleObject(context->hEvent, INFINITE) == WAIT_OBJECT_0 &&
       WSAGetOverlappedResult(descriptor_, context, &length, TRUE, &flags)) {
     *end_point = context->end_pointw;
-    set_connected(true);
+    connected_ = true;
   } else {
     result = HRESULT_FROM_LAST_ERROR();
   }
@@ -365,9 +365,6 @@ void SocketStream::WriteAsync(const void* buffer, uint64_t length,
                               AbstractStream::Listener* listener) {
   CommunicateAsync(GeneralRequest::Write, const_cast<void*>(buffer), length, 0,
                    nullptr, 0, listener, nullptr);
-}
-
-SocketStream::SocketStream(SOCKET descriptor) : Socket(descriptor) {
 }
 
 void SocketStream::Reset() {
@@ -736,7 +733,7 @@ void SocketStream::OnCompleted(AsyncContext* context, HRESULT result,
     case SocketRequest::Connect:
       if (SUCCEEDED(result)) {
         if (SetOption(SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT, nullptr, 0))
-          set_connected(true);
+          connected_ = true;
         else
           result = HRESULT_FROM_LAST_ERROR();
       }

@@ -4,21 +4,31 @@
 
 #include <assert.h>
 
+#include <algorithm>
 #include <memory>
 #include <utility>
 
 #include "madoka/concurrent/lock_guard.h"
-#include "madoka/net/socket_event_listener.h"
+
+#undef min
 
 namespace madoka {
 namespace net {
 
-struct AsyncSocket::AsyncContext : OVERLAPPED, WSABUF {
-  explicit AsyncContext(AsyncSocket* socket)
+namespace {
+enum Request {
+  Invalid, Connect, Receive, ReceiveFrom, Send, SendTo
+};
+
+LPFN_CONNECTEX ConnectEx = nullptr;
+}  // namespace
+
+struct AsyncSocket::Context : OVERLAPPED, WSABUF {
+  Context()
       : OVERLAPPED(),
         WSABUF(),
-        socket(socket),
-        action(None),
+        request(Request::Invalid),
+        result(S_OK),
         end_point(nullptr),
         flags(0),
         address(),
@@ -27,38 +37,61 @@ struct AsyncSocket::AsyncContext : OVERLAPPED, WSABUF {
         event(NULL) {
   }
 
-  AsyncSocket* socket;
-  Action action;
+  Request request;
+  HRESULT result;
   const addrinfo* end_point;
   DWORD flags;
   sockaddr_storage address;
   int address_length;
-  SocketEventListener* listener;
+  Listener* listener;
   HANDLE event;
 };
 
-PTP_CALLBACK_ENVIRON AsyncSocket::environment_ = NULL;
-LPFN_CONNECTEX AsyncSocket::ConnectEx = NULL;
+PTP_CALLBACK_ENVIRON AsyncSocket::environment_ = nullptr;
 
-AsyncSocket::AsyncSocket() : io_(), cancel_connect_(false) {
-  ::InitOnceInitialize(&init_once_);
+AsyncSocket::AsyncSocket()
+    : work_(CreateThreadpoolWork(OnRequested, this, environment_)),
+      cancel_connect_(false),
+      io_(nullptr) {
+}
+
+AsyncSocket::AsyncSocket(int family, int type, int protocol) : AsyncSocket() {
+  Create(family, type, protocol);
 }
 
 AsyncSocket::~AsyncSocket() {
   Close();
-  CloseInternal();
 
   madoka::concurrent::LockGuard guard(&lock_);
-  while (!requests_.empty())
-    empty_.Sleep(&lock_);
+
+  if (work_ != nullptr) {
+    PTP_WORK work = work_;
+    work_ = nullptr;
+
+    lock_.Unlock();
+    WaitForThreadpoolWorkCallbacks(work, FALSE);
+    lock_.Lock();
+
+    CloseThreadpoolWork(work);
+  }
 }
 
 void AsyncSocket::Close() {
-  cancel_connect_ = true;
+  madoka::concurrent::LockGuard guard(&lock_);
 
+  cancel_connect_ = true;
   Socket::Close();
 
-  ::InitOnceInitialize(&init_once_);
+  if (io_ != nullptr) {
+    lock_.Unlock();
+    WaitForThreadpoolIoCallbacks(io_, FALSE);
+    lock_.Lock();
+
+    if (io_ != nullptr) {
+      CloseThreadpoolIo(io_);
+      io_ = nullptr;
+    }
+  }
 }
 
 PTP_CALLBACK_ENVIRON AsyncSocket::GetCallbackEnvironment() {
@@ -69,473 +102,564 @@ void AsyncSocket::SetCallbackEnvironment(PTP_CALLBACK_ENVIRON environment) {
   environment_ = environment;
 }
 
-void AsyncSocket::ConnectAsync(const addrinfo* end_points,
-                               SocketEventListener* listener) {
-  if (listener == nullptr)
-    listener->OnConnected(this, E_POINTER);
-  else if (end_points == nullptr)
-    listener->OnConnected(this, WSAEFAULT);
-  else if (connected())
-    listener->OnConnected(this, WSAEISCONN);
-  else if (DispatchRequest(Connecting, end_points, nullptr, 0, 0, nullptr, 0,
-                           listener, NULL) == nullptr)
-    listener->OnConnected(this, GetLastError());
+void AsyncSocket::ConnectAsync(const addrinfo* end_point, Listener* listener) {
+  HRESULT result = S_OK;
+
+  do {
+    if (end_point == nullptr || listener == nullptr) {
+      result = E_INVALIDARG;
+      break;
+    }
+
+    auto context = CreateContext(Request::Connect, end_point, nullptr, 0, 0,
+                                 nullptr, 0, listener, NULL);
+    if (context == nullptr) {
+      result = E_OUTOFMEMORY;
+      break;
+    }
+
+    result = RequestAsync(std::move(context));
+  } while (false);
+
+  if (FAILED(result))
+    listener->OnConnected(this, result, end_point);
 }
 
-AsyncSocket::AsyncContext* AsyncSocket::BeginConnect(const addrinfo* end_points,
-                                                     HANDLE event) {
-  if (end_points == nullptr || event == NULL)
-    return nullptr;
-  if (connected())
-    return nullptr;
-
-  cancel_connect_ = false;
-
-  return DispatchRequest(Connecting, end_points, nullptr, 0, 0, nullptr, 0,
-                         nullptr, event);
-}
-
-bool AsyncSocket::EndConnect(AsyncContext* context) {
-  if (context == nullptr || context->socket != this)
-    return false;
-  if (context->action != Connecting)
-    return false;
-
-  int result = EndRequest(context, nullptr, nullptr);
-  if (result == SOCKET_ERROR)
-    return false;
-
-  if (!SetOption(SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT, NULL, 0))
-    return false;
-
-  set_connected(true);
-
-  return true;
-}
-
-void AsyncSocket::ReceiveAsync(void* buffer, int size, int flags,
-                               SocketEventListener* listener) {
-  if (listener == nullptr)
-    listener->OnReceived(this, E_POINTER, buffer, 0);
-  if (!connected())
-    listener->OnReceived(this, WSAENOTCONN, buffer, 0);
-  else if (DispatchRequest(Receiving, nullptr, buffer, size, flags, nullptr, 0,
-                           listener, NULL) == nullptr)
-    listener->OnReceived(this, GetLastError(), buffer, 0);
-}
-
-AsyncSocket::AsyncContext* AsyncSocket::BeginReceive(void* buffer, int size,
-                                                     int flags, HANDLE event) {
-  if (event == NULL)
-    return nullptr;
-  if (!connected())
+AsyncSocket::Context* AsyncSocket::BeginConnect(const addrinfo* end_point,
+                                                HANDLE event) {
+  if (end_point == nullptr || event == NULL)
     return nullptr;
 
-  return DispatchRequest(Receiving, nullptr, buffer, size, flags, nullptr, 0,
-                         nullptr, event);
-}
-
-int AsyncSocket::EndReceive(AsyncContext* context) {
-  if (context == nullptr || context->socket != this)
-    return SOCKET_ERROR;
-  if (context->action != Receiving)
-    return SOCKET_ERROR;
-
-  return EndRequest(context, nullptr, nullptr);
-}
-
-void AsyncSocket::ReceiveFromAsync(void* buffer, int size, int flags,
-                                   SocketEventListener* listener) {
-  if (listener == nullptr)
-    listener->OnReceivedFrom(this, E_POINTER, buffer, size, nullptr, 0);
-  if (!bound())
-    listener->OnReceivedFrom(this, WSAEINVAL, buffer, size, nullptr, 0);
-  else if (DispatchRequest(ReceivingFrom, nullptr, buffer, size, flags, nullptr,
-                           0, listener, NULL) == nullptr)
-    listener->OnReceivedFrom(this, GetLastError(), buffer, size, nullptr, 0);
-}
-
-AsyncSocket::AsyncContext* AsyncSocket::BeginReceiveFrom(
-    void* buffer, int size, int flags, HANDLE event) {
-  if (event == NULL)
-    return nullptr;
-  if (!bound())
+  auto context = CreateContext(Request::Connect, end_point, nullptr, 0, 0,
+                               nullptr, 0, nullptr, event);
+  if (context == nullptr)
     return nullptr;
 
-  return DispatchRequest(ReceivingFrom, nullptr, buffer, size, flags, nullptr,
-                         0, nullptr, event);
+  return BeginRequest(std::move(context));
 }
 
-int AsyncSocket::EndReceiveFrom(AsyncContext* context, sockaddr* address,
-                                int* length) {
-  if (context == nullptr || context->socket != this)
-    return SOCKET_ERROR;
-  if (context->action != ReceivingFrom)
-    return SOCKET_ERROR;
+HRESULT AsyncSocket::EndConnect(Context* context) {
+  if (context == nullptr || context->request != Request::Connect)
+    return E_INVALIDARG;
 
-  return EndRequest(context, address, length);
+  HRESULT result = S_OK;
+  if (context->event != NULL &&
+      WaitForSingleObject(context->event, INFINITE) != WAIT_OBJECT_0)
+    result = HRESULT_FROM_WIN32(GetLastError());
+  else
+    result = context->result;
+
+  if (context->listener == nullptr)
+    delete context;
+
+  return result;
 }
 
-void AsyncSocket::SendAsync(const void* buffer, int size, int flags,
-                            SocketEventListener* listener) {
-  if (listener == nullptr)
-    listener->OnSent(this, E_POINTER, const_cast<void*>(buffer), 0);
-  if (!connected())
-    listener->OnSent(this, WSAENOTCONN, const_cast<void*>(buffer), 0);
-  else if (DispatchRequest(Sending, nullptr, const_cast<void*>(buffer), size,
-                           flags, nullptr, 0, listener, NULL) == nullptr)
-    listener->OnSent(this, GetLastError(), const_cast<void*>(buffer), 0);
+void AsyncSocket::ReceiveAsync(void* buffer, int length, int flags,
+                               Listener* listener) {
+  HRESULT result = S_OK;
+
+  do {
+    if (buffer == nullptr && length != 0 || listener == nullptr) {
+      result = E_INVALIDARG;
+      break;
+    }
+
+    auto context = CreateContext(Request::Receive, nullptr,
+                                 static_cast<char*>(buffer), length, flags,
+                                 nullptr, 0, listener, NULL);
+    if (context == nullptr) {
+      result = E_OUTOFMEMORY;
+      break;
+    }
+
+    result = RequestAsync(std::move(context));
+  } while (false);
+
+  if (FAILED(result))
+    listener->OnReceived(this, result, buffer, 0, 0);
 }
 
-AsyncSocket::AsyncContext* AsyncSocket::BeginSend(const void* buffer, int size,
-                                                  int flags, HANDLE event) {
-  if (event == NULL)
-    return nullptr;
-  if (!connected())
-    return nullptr;
-
-  return DispatchRequest(Sending, nullptr, const_cast<void*>(buffer), size,
-                         flags, nullptr, 0, nullptr, event);
-}
-
-int AsyncSocket::EndSend(AsyncContext* context) {
-  if (context == nullptr || context->socket != this)
-    return SOCKET_ERROR;
-  if (context->action != Sending)
-    return SOCKET_ERROR;
-
-  return EndRequest(context, nullptr, nullptr);
-}
-
-void AsyncSocket::SendToAsync(const void* buffer, int size, int flags,
-                              const sockaddr* address, int length,
-                              SocketEventListener* listener) {
-  if (listener == nullptr)
-    listener->OnSentTo(this, E_POINTER, const_cast<void*>(buffer), size,
-                       const_cast<sockaddr*>(address), length);
-  if (!IsValid())
-    listener->OnSentTo(this, WSAENOTSOCK, const_cast<void*>(buffer), size,
-                       const_cast<sockaddr*>(address), length);
-  if (DispatchRequest(SendingTo, nullptr, const_cast<void*>(buffer), size,
-                      flags, address, length, listener, NULL) == nullptr)
-    listener->OnSentTo(this, GetLastError(), const_cast<void*>(buffer), size,
-                       const_cast<sockaddr*>(address), length);
-}
-
-AsyncSocket::AsyncContext* AsyncSocket::BeginSendTo(
-    const void* buffer, int size, int flags, const sockaddr* address,
-  int length, HANDLE event) {
-  if (event == NULL)
-    return nullptr;
-  if (!IsValid())
+AsyncSocket::Context* AsyncSocket::BeginReceive(void* buffer, int length,
+                                                int flags, HANDLE event) {
+  if (buffer == nullptr && length != 0 || event == NULL)
     return nullptr;
 
-  return DispatchRequest(SendingTo, nullptr, const_cast<void*>(buffer), size,
-                         flags, address, length, nullptr, event);
-}
-
-int AsyncSocket::EndSendTo(AsyncContext* context) {
-  if (context == nullptr || context->socket != this)
-    return SOCKET_ERROR;
-  if (context->action != SendingTo)
-    return SOCKET_ERROR;
-
-  return EndRequest(context, nullptr, nullptr);
-}
-
-AsyncSocket::AsyncSocket(SOCKET descriptor)
-    : Socket(descriptor), io_(), cancel_connect_(false) {
-  ::InitOnceInitialize(&init_once_);
-}
-
-void AsyncSocket::CloseInternal() {
-  if (io_ != NULL) {
-    ::WaitForThreadpoolIoCallbacks(io_, FALSE);
-    ::CloseThreadpoolIo(io_);
-    io_ = NULL;
-  }
-}
-
-AsyncSocket::AsyncContext* AsyncSocket::DispatchRequest(
-    Action action,  const addrinfo* end_points, void* buffer, int size,
-    int flags, const sockaddr* address, int length,
-    SocketEventListener* listener, HANDLE event) {
-  if (action != Connecting &&
-      !::InitOnceExecuteOnce(&init_once_, OnInitialize, this, nullptr))
+  auto context = CreateContext(Request::Receive, nullptr,
+                               static_cast<char*>(buffer), length, flags,
+                               nullptr, 0, nullptr, event);
+  if (context == nullptr)
     return nullptr;
 
-  auto context = std::make_unique<AsyncContext>(this);
-  if (context == nullptr) {
-    SetLastError(E_OUTOFMEMORY);
-    return nullptr;
+  return BeginRequest(std::move(context));
+}
+
+int AsyncSocket::EndReceive(Context* context, HRESULT* result) {
+  if (context == nullptr || context->request != Request::Receive) {
+    *result = E_INVALIDARG;
+    return -1;
   }
 
-  if (action == Connecting)
-    cancel_connect_ = false;
+  if (context->event != NULL &&
+      WaitForSingleObject(context->event, INFINITE) != WAIT_OBJECT_0)
+    *result = HRESULT_FROM_WIN32(GetLastError());
+  else
+    *result = context->result;
 
-  context->len = size;
-  context->buf = static_cast<char*>(buffer);
-  context->action = action;
-  context->end_point = end_points;
-  context->flags = flags;
-  context->listener = listener;
-  context->event = event;
+  int length = context->len;
 
-  if (address != nullptr && length > 0) {
-    ::memmove(&context->address, address, length);
-    context->address_length = length;
+  if (context->listener == nullptr)
+    delete context;
+
+  return length;
+}
+
+void AsyncSocket::ReceiveFromAsync(void* buffer, int length, int flags,
+                                   Listener* listener) {
+  HRESULT result = S_OK;
+
+  do {
+    if (buffer == nullptr && length != 0 || listener == nullptr) {
+      result = E_INVALIDARG;
+      break;
+    }
+
+    auto context = CreateContext(Request::ReceiveFrom, nullptr,
+                                 static_cast<char*>(buffer), length, flags,
+                                 nullptr, 0, listener, NULL);
+    if (context == nullptr) {
+      result = E_OUTOFMEMORY;
+      break;
+    }
+
+    result = RequestAsync(std::move(context));
+  } while (false);
+
+  if (FAILED(result))
+    listener->OnReceivedFrom(this, result, buffer, 0, 0, nullptr, 0);
+}
+
+AsyncSocket::Context* AsyncSocket::BeginReceiveFrom(void* buffer, int length,
+                                                    int flags, HANDLE event) {
+  if (buffer == nullptr && length != 0 || event == NULL)
+    return nullptr;
+
+  auto context = CreateContext(Request::ReceiveFrom, nullptr,
+                               static_cast<char*>(buffer), length, flags,
+                               nullptr, 0, nullptr, event);
+  if (context == nullptr)
+    return nullptr;
+
+  return BeginRequest(std::move(context));
+}
+
+int AsyncSocket::EndReceiveFrom(Context* context, void* address, int* length) {
+  if (context == nullptr || context->request != Request::ReceiveFrom)
+    return -1;
+
+  HRESULT result = S_OK;
+  if (context->event != NULL &&
+      WaitForSingleObject(context->event, INFINITE) != WAIT_OBJECT_0)
+    result = HRESULT_FROM_WIN32(GetLastError());
+
+  int received = context->len;
+  if (FAILED(result))
+    received = -1;
+
+  if (address != nullptr && length != nullptr) {
+    *length = std::min(context->address_length, *length);
+    memmove(address, &context->address, *length);
   }
 
-  if (event != NULL && !::ResetEvent(event))
+  if (context->listener == nullptr)
+    delete context;
+
+  return received;
+}
+
+void AsyncSocket::SendAsync(const void* buffer, int length, int flags,
+                            Listener* listener) {
+  HRESULT result = S_OK;
+
+  do {
+    if (buffer == nullptr && length != 0 || listener == nullptr) {
+      result = E_INVALIDARG;
+      break;
+    }
+
+    auto context = CreateContext(Request::Send, nullptr,
+                                 const_cast<void*>(buffer), length, flags,
+                                 nullptr, 0, listener, NULL);
+    if (context == nullptr) {
+      result = E_OUTOFMEMORY;
+      break;
+    }
+
+    result = RequestAsync(std::move(context));
+  } while (false);
+
+  if (FAILED(result))
+    listener->OnSent(this, result, const_cast<void*>(buffer), 0);
+}
+
+AsyncSocket::Context* AsyncSocket::BeginSend(const void* buffer, int length,
+                                             int flags, HANDLE event) {
+  if (buffer == nullptr && length != 0 || event == NULL)
+    return nullptr;
+
+  auto context = CreateContext(Request::Send, nullptr,
+                               const_cast<void*>(buffer), length, flags,
+                               nullptr, 0, nullptr, event);
+  if (context == nullptr)
+    return nullptr;
+
+  return BeginRequest(std::move(context));
+}
+
+int AsyncSocket::EndSend(Context* context, HRESULT* result) {
+  if (context == nullptr || context->request != Request::Send)
+    return -1;
+
+  if (context->event != NULL &&
+      WaitForSingleObject(context->event, INFINITE) != WAIT_OBJECT_0)
+    *result = HRESULT_FROM_WIN32(GetLastError());
+  else
+    *result = context->result;
+
+  int length = context->len;
+
+  if (context->listener == nullptr)
+    delete context;
+
+  return length;
+}
+
+void AsyncSocket::SendToAsync(const void* buffer, int length, int flags,
+                              const void* address, int address_length,
+                              Listener* listener) {
+  HRESULT result = S_OK;
+
+  do {
+    if (buffer == nullptr && length != 0 || address == nullptr ||
+        address_length == 0 || listener == nullptr) {
+      result = E_INVALIDARG;
+      break;
+    }
+
+    auto context = CreateContext(Request::SendTo, nullptr,
+                                 const_cast<void*>(buffer), length, flags,
+                                 address, address_length, listener, NULL);
+    if (context == nullptr) {
+      result = E_OUTOFMEMORY;
+      break;
+    }
+
+    result = RequestAsync(std::move(context));
+  } while (false);
+
+  if (FAILED(result))
+    listener->OnSentTo(this, result, const_cast<void*>(buffer), 0,
+                       static_cast<const sockaddr*>(address), address_length);
+}
+
+AsyncSocket::Context* AsyncSocket::BeginSendTo(
+    const void* buffer, int length, int flags, const void* address,
+    int address_length, HANDLE event) {
+  if (buffer == nullptr && length != 0 || address == nullptr ||
+      address_length == 0 || event == NULL)
+    return nullptr;
+
+  auto context = CreateContext(Request::SendTo, nullptr,
+                               const_cast<void*>(buffer), length, flags,
+                               address, address_length, nullptr, event);
+  if (context == nullptr)
+    return nullptr;
+
+  return BeginRequest(std::move(context));
+}
+
+int AsyncSocket::EndSendTo(Context* context, HRESULT* result) {
+  if (context == nullptr || context->request != Request::SendTo)
+    return -1;
+
+  if (context->event != NULL &&
+      WaitForSingleObject(context->event, INFINITE) == WAIT_OBJECT_0)
+    *result = HRESULT_FROM_WIN32(GetLastError());
+  else
+    *result = context->result;
+
+  int length = context->len;
+
+  if (context->listener == nullptr)
+    delete context;
+
+  return length;
+}
+
+std::unique_ptr<AsyncSocket::Context> AsyncSocket::CreateContext(
+    int request, const addrinfo* end_point, void* buffer, int length,
+    DWORD flags, const void* address, int address_length, Listener* listener,
+    HANDLE event) {
+  auto context = std::make_unique<Context>();
+  if (context != nullptr) {
+    context->request = static_cast<Request>(request);
+    context->end_point = end_point;
+    context->buf = static_cast<char*>(buffer);
+    context->len = length;
+    context->flags = flags;
+
+    if (address != nullptr && address_length > 0) {
+      memmove_s(&context->address, context->address_length, address,
+                address_length);
+      context->address_length = address_length;
+    }
+
+    context->listener = listener;
+    context->event = event;
+  }
+
+  return std::move(context);
+}
+
+HRESULT AsyncSocket::RequestAsync(std::unique_ptr<Context>&& context) {
+  if (context == nullptr)
+    return E_INVALIDARG;
+
+  madoka::concurrent::LockGuard guard(&lock_);
+
+  if (work_ == nullptr)
+    return E_HANDLE;
+
+  requests_.push_back(std::move(context));
+  if (requests_.size() == 1)
+    SubmitThreadpoolWork(work_);
+
+  return S_OK;
+}
+
+AsyncSocket::Context* AsyncSocket::BeginRequest(
+    std::unique_ptr<Context>&& context) {
+  if (context == nullptr || context->event == NULL)
     return nullptr;
 
   madoka::concurrent::LockGuard guard(&lock_);
-  auto pointer = context.get();
 
-  if (!::TrySubmitThreadpoolCallback(OnRequested, pointer, environment_))
+  if (work_ == nullptr)
     return nullptr;
 
+  ResetEvent(context->event);
+
+  auto pointer = context.get();
   requests_.push_back(std::move(context));
+  if (requests_.size() == 1)
+    SubmitThreadpoolWork(work_);
 
   return pointer;
 }
 
-int AsyncSocket::EndRequest(AsyncContext* context, sockaddr* address,
-                            int* length) {
-  if (context->event != NULL)
-    ::WaitForSingleObject(context->event, INFINITE);
+void CALLBACK AsyncSocket::OnRequested(PTP_CALLBACK_INSTANCE callback,
+                                       void* instance, PTP_WORK work) {
+  static_cast<AsyncSocket*>(instance)->OnRequested(work);
+}
 
-  DWORD bytes = 0;
-  BOOL succeeded = ::GetOverlappedResult(reinterpret_cast<HANDLE>(descriptor_),
-                                         context, &bytes, FALSE);
-  if (succeeded && address != nullptr && length != nullptr) {
-    if (*length >= context->address_length)
-      ::memmove(address, &context->address, context->address_length);
-    *length = context->address_length;
-  }
+void AsyncSocket::OnRequested(PTP_WORK work) {
+  HRESULT result = S_OK;
 
   lock_.Lock();
-  for (auto i = requests_.begin(), l = requests_.end(); i != l; ++i) {
-    if (i->get() == context) {
-      requests_.erase(i);
 
-      if (requests_.empty())
-        empty_.WakeAll();
+  auto context = std::move(requests_.front());
+  requests_.pop_front();
+  if (!requests_.empty())
+    SubmitThreadpoolWork(work);
 
+  do {
+    if (context->request == Request::Connect) {
+      if (connected_) {
+        result = __HRESULT_FROM_WIN32(WSAEISCONN);
+        break;
+      }
+
+      if (cancel_connect_) {
+        result = E_ABORT;
+        break;
+      }
+
+      if (!Create(context->end_point->ai_family,
+                  context->end_point->ai_socktype,
+                  context->end_point->ai_protocol)) {
+        result = HRESULT_FROM_WIN32(WSAGetLastError());
+        break;
+      }
+
+      cancel_connect_ = false;
+
+      if (ConnectEx == nullptr) {
+        GUID guid = WSAID_CONNECTEX;
+        DWORD length;
+        if (WSAIoctl(descriptor_, SIO_GET_EXTENSION_FUNCTION_POINTER, &guid,
+                     sizeof(guid), &ConnectEx, sizeof(ConnectEx), &length,
+                     nullptr, nullptr) != 0) {
+          result = HRESULT_FROM_WIN32(WSAGetLastError());
+          break;
+        }
+      }
+
+      sockaddr_storage address = { context->end_point->ai_family };
+      if (!Bind(&address, context->end_point->ai_addrlen)) {
+        result = HRESULT_FROM_WIN32(WSAGetLastError());
+        break;
+      }
+    } else if ((context->request == Request::Receive ||
+                context->request == Request::Send) &&
+               !connected_) {
+      result = __HRESULT_FROM_WIN32(WSAENOTCONN);
+      break;
+    } else if (context->request == Request::ReceiveFrom && !bound_) {
+      result = __HRESULT_FROM_WIN32(WSAEINVAL);
+      break;
+    } else if (!IsValid()) {
+      result = __HRESULT_FROM_WIN32(WSAENOTSOCK);
       break;
     }
-  }
+
+    if (io_ == nullptr) {
+      io_ = CreateThreadpoolIo(reinterpret_cast<HANDLE>(descriptor_),
+                               OnCompleted, this, environment_);
+      if (io_ == nullptr) {
+        result = HRESULT_FROM_WIN32(GetLastError());
+        break;
+      }
+    }
+
+    StartThreadpoolIo(io_);
+    BOOL succeeded = FALSE;
+
+    switch (context->request) {
+      case Request::Connect:
+        succeeded = ConnectEx(descriptor_,
+                              context->end_point->ai_addr,
+                              context->end_point->ai_addrlen,
+                              nullptr,  // data to send
+                              0,        // bytes to send
+                              nullptr,  // bytes sent
+                              context.get());
+        break;
+
+      case Request::Receive:
+        succeeded = WSARecv(descriptor_, context.get(), 1, nullptr,
+                            &context->flags, context.get(), nullptr) == 0;
+        break;
+
+      case Request::ReceiveFrom:
+        succeeded = WSARecvFrom(descriptor_, context.get(), 1, nullptr,
+                                &context->flags,
+                                reinterpret_cast<sockaddr*>(&context->address),
+                                &context->address_length, context.get(),
+                                nullptr) == 0;
+        break;
+
+      case Request::Send:
+        succeeded = WSASend(descriptor_, context.get(), 1, nullptr,
+                            context->flags, context.get(), nullptr) == 0;
+        break;
+
+      case Request::SendTo:
+        succeeded = WSASendTo(descriptor_, context.get(), 1, nullptr,
+                              context->flags,
+                              reinterpret_cast<sockaddr*>(&context->address),
+                              context->address_length, context.get(),
+                              nullptr) == 0;
+        break;
+
+      default:
+        assert(false);
+    }
+
+    int error = WSAGetLastError();
+    if (!succeeded && error != WSA_IO_PENDING) {
+      CancelThreadpoolIo(io_);
+      result = __HRESULT_FROM_WIN32(error);
+      break;
+    }
+
+    context.release();
+  } while (false);
+
   lock_.Unlock();
 
-  if (!succeeded)
-    return SOCKET_ERROR;
-
-  return bytes;
+  if (FAILED(result))
+    OnCompleted(std::move(context), result, 0);
 }
 
-int AsyncSocket::DoAsyncConnect(AsyncContext* context) {
-  if (cancel_connect_)
-    return SOCKET_ERROR;
-
-  auto end_point = context->end_point;
-
-  switch (end_point->ai_socktype) {
-    case 0:
-    case SOCK_STREAM:
-    case SOCK_RDM:
-    case SOCK_SEQPACKET:
-      break;
-
-    default:
-      WSASetLastError(WSAEINVAL);
-      return SOCKET_ERROR;
-  }
-
-  if (!Create(end_point))
-    return SOCKET_ERROR;
-
-  cancel_connect_ = false;
-
-  if (!::InitOnceExecuteOnce(&init_once_, OnInitialize, this, nullptr))
-    return SOCKET_ERROR;
-
-  if (ConnectEx == NULL) {
-    GUID guid = WSAID_CONNECTEX;
-    DWORD size = 0;
-    ::WSAIoctl(descriptor_, SIO_GET_EXTENSION_FUNCTION_POINTER, &guid,
-               sizeof(guid), &ConnectEx, sizeof(ConnectEx), &size, NULL, NULL);
-  }
-
-  sockaddr_storage address = { end_point->ai_family };
-  int result = ::bind(descriptor_, reinterpret_cast<sockaddr*>(&address),
-                      end_point->ai_addrlen);
-  if (result != 0)
-    return SOCKET_ERROR;
-
-  ::StartThreadpoolIo(io_);
-
-  return ConnectEx(descriptor_, end_point->ai_addr, end_point->ai_addrlen, NULL,
-                   0, NULL, context);
-}
-
-BOOL CALLBACK AsyncSocket::OnInitialize(INIT_ONCE* init_once, void* param,
-                                        void** context) {
-  return static_cast<AsyncSocket*>(param)->OnInitialize(context);
-}
-
-BOOL AsyncSocket::OnInitialize(void** context) {
-  if (!IsValid())
-    return FALSE;
-
-  CloseInternal();
-  assert(io_ == NULL);
-
-  io_ = ::CreateThreadpoolIo(reinterpret_cast<HANDLE>(descriptor_),
-                              OnCompleted, this, environment_);
-  if (io_ == NULL)
-    return FALSE;
-
-  return TRUE;
-}
-
-void CALLBACK AsyncSocket::OnRequested(PTP_CALLBACK_INSTANCE instance,
-                                       void* param) {
-  AsyncContext* context = static_cast<AsyncContext*>(param);
-  context->socket->OnRequested(context);
-}
-
-void AsyncSocket::OnRequested(AsyncContext* context) {
-  madoka::concurrent::LockGuard guard(&lock_);
-
-  DWORD bytes = 0;
-  int result = 0;
-  int error = ERROR_SUCCESS;
-
-  if (context->action != Connecting)
-    ::StartThreadpoolIo(io_);
-
-  switch (context->action) {
-    case Connecting:
-      result = DoAsyncConnect(context);
-      break;
-
-    case Receiving:
-      result = ::WSARecv(descriptor_, context, 1, &bytes, &context->flags,
-                         context, NULL);
-      break;
-
-    case ReceivingFrom:
-      result = ::WSARecvFrom(descriptor_, context, 1, &bytes, &context->flags,
-                             reinterpret_cast<sockaddr*>(&context->address),
-                             &context->address_length, context, NULL);
-      break;
-
-    case Sending:
-      result = ::WSASend(descriptor_, context, 1, &bytes, context->flags,
-                         context, NULL);
-      break;
-
-    case SendingTo:
-      result = ::WSASendTo(descriptor_, context, 1, &bytes, context->flags,
-                           reinterpret_cast<sockaddr*>(&context->address),
-                           context->address_length, context, NULL);
-      break;
-
-    default:
-      assert(false);
-  }
-
-  error = ::WSAGetLastError();
-  if (result != 0 && error != WSA_IO_PENDING) {
-    if (io_ != nullptr)
-      ::CancelThreadpoolIo(io_);
-
-    OnCompleted(context, error, 0);
-  }
-}
-
-void CALLBACK AsyncSocket::OnCompleted(PTP_CALLBACK_INSTANCE instance,
-                                       void* context, void* overlapped,
+void CALLBACK AsyncSocket::OnCompleted(PTP_CALLBACK_INSTANCE callback,
+                                       void* instance, void* overlapped,
                                        ULONG error, ULONG_PTR bytes,
                                        PTP_IO io) {
-  static_cast<AsyncSocket*>(context)->OnCompleted(
-      static_cast<AsyncContext*>(static_cast<OVERLAPPED*>(overlapped)),
-      error, bytes);
+  static_cast<AsyncSocket*>(instance)->OnCompleted(
+      std::unique_ptr<Context>(
+          static_cast<Context*>(
+              static_cast<OVERLAPPED*>(overlapped))),
+      __HRESULT_FROM_WIN32(error), bytes);
 }
 
-void AsyncSocket::OnCompleted(AsyncContext* context, ULONG error,
-                              ULONG_PTR bytes) {
-  SocketEventListener* listener = context->listener;
-
-  if (context->action == Connecting && error != 0) {
-    if (!cancel_connect_ && context->end_point->ai_next != nullptr) {
-      context->end_point = context->end_point->ai_next;
-      if (::TrySubmitThreadpoolCallback(OnRequested, context, environment_))
-        return;
+void AsyncSocket::OnCompleted(std::unique_ptr<Context>&& context,
+                              HRESULT result, int length) {
+  if (SUCCEEDED(result)) {
+    if (context->request == Request::Connect) {
+      if (SetOption(SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT, nullptr, 0))
+        connected_ = true;
+      else
+        result = HRESULT_FROM_WIN32(WSAGetLastError());
+    } else if (context->request == Request::Receive ||
+               context->request == Request::ReceiveFrom) {
+      DWORD bytes;
+      if (!WSAGetOverlappedResult(descriptor_, context.get(), &bytes, FALSE,
+                                  &context->flags))
+        result = HRESULT_FROM_WIN32(WSAGetLastError());
     }
+
+    if (FAILED(result))
+      length = -1;
   }
 
-  if (listener != NULL) {
-    void* buffer = context->buf;
+  context->result = result;
+  context->len = length;
 
-    switch (context->action) {
-      case Connecting: {
-        bool succeeded = EndConnect(context);
-        if (!succeeded && error == 0)
-          error = ::GetLastError();
-
-        listener->OnConnected(this, error);
+  if (context->listener != nullptr) {
+    switch (context->request) {
+      case Request::Connect:
+        context->listener->OnConnected(this, result, context->end_point);
         break;
-      }
 
-      case Receiving: {
-        int result = EndReceive(context);
-        if (result == SOCKET_ERROR && error == 0)
-          error = ::GetLastError();
-
-        listener->OnReceived(this, error, buffer, bytes);
+      case Request::Receive:
+        context->listener->OnReceived(this, result, context->buf, length,
+                                      context->flags);
         break;
-      }
 
-      case ReceivingFrom: {
-        sockaddr_storage from = context->address;
-        int from_length = context->address_length;
-        int result = EndReceiveFrom(context, nullptr, nullptr);
-        if (result == SOCKET_ERROR && error == 0)
-          error = ::GetLastError();
-
-        listener->OnReceivedFrom(this, error, buffer, bytes,
-                                 reinterpret_cast<sockaddr*>(&from),
-                                 from_length);
+      case Request::ReceiveFrom:
+        context->listener->OnReceivedFrom(
+            this, result, context->buf, length, context->flags,
+            reinterpret_cast<sockaddr*>(&context->address),
+            context->address_length);
         break;
-      }
 
-      case Sending: {
-        int result = EndSend(context);
-        if (result == SOCKET_ERROR && error == 0)
-          error = ::GetLastError();
-
-        listener->OnSent(this, error, buffer, bytes);
+      case Request::Send:
+        context->listener->OnSent(this, result, context->buf, length);
         break;
-      }
 
-      case SendingTo: {
-        sockaddr_storage to = context->address;
-        int to_length = context->address_length;
-        int result = EndSendTo(context);
-        if (result == SOCKET_ERROR && error == 0)
-          error = ::GetLastError();
-
-        listener->OnSentTo(this, error, buffer, bytes,
-                           reinterpret_cast<sockaddr*>(&to), to_length);
+      case Request::SendTo:
+        context->listener->OnSentTo(
+            this, result, context->buf, length,
+            reinterpret_cast<sockaddr*>(&context->address),
+            context->address_length);
         break;
-      }
 
       default:
         assert(false);
     }
   } else if (context->event != NULL) {
-    ::SetEvent(context->event);
+    SetEvent(context->event);
+    context.release();
   } else {
     assert(false);
   }

@@ -3,7 +3,16 @@
 #ifndef MADOKA_NET_ASYNC_SERVER_SOCKET_H_
 #define MADOKA_NET_ASYNC_SERVER_SOCKET_H_
 
-#include <madoka/concurrent/condition_variable.h>
+#include <madoka/net/common.h>
+
+#ifndef _WIN32
+#  error The AsyncSocket supports Windows platforms only.
+#endif  // _WIN32
+
+#if _WIN32_WINNT < 0x0600
+#  error The AsyncSocket requires the thread pool API.
+#endif  // _WIN32_WINNT < 0x0600
+
 #include <madoka/concurrent/critical_section.h>
 #include <madoka/net/server_socket.h>
 
@@ -13,16 +22,16 @@
 namespace madoka {
 namespace net {
 
-class AsyncServerSocket : public ServerSocket {
+class AsyncServerSocket final : public ServerSocket {
  public:
-  struct AsyncContext;
+  struct Context;
 
   class Listener {
    public:
     virtual ~Listener() {}
 
     virtual void OnAccepted(AsyncServerSocket* server, HRESULT result,
-                            AsyncContext* context) = 0;
+                            Context* context) = 0;
   };
 
   AsyncServerSocket();
@@ -30,50 +39,56 @@ class AsyncServerSocket : public ServerSocket {
 
   ~AsyncServerSocket();
 
+  void Close() override;
+
+  static PTP_CALLBACK_ENVIRON GetCallbackEnvironment();
+  static void SetCallbackEnvironment(PTP_CALLBACK_ENVIRON environment);
+
   void AcceptAsync(Listener* listener);
-  AsyncContext* BeginAccept(HANDLE event);
+  Context* BeginAccept(HANDLE event);
 
-  template<class T>
-  HRESULT EndAccept(AsyncContext* context, std::unique_ptr<T>* socket) {
-    SOCKET peer = INVALID_SOCKET;
-    HRESULT result = EndAccept(context, &peer);
-    if (FAILED(result))
-      return result;
+  template<class Impl>
+  std::unique_ptr<Impl> EndAccept(Context* context, HRESULT* result) {
+    struct Wrapper : Impl {
+      explicit Wrapper(SOCKET descriptor) {
+        descriptor_ = descriptor;
+        bound_ = true;
+        connected_ = true;
+      }
+    };
 
-    T* client = new T(peer);
-    if (client == nullptr) {
-      closesocket(peer);
-      return E_OUTOFMEMORY;
-    }
+    if (context == nullptr || result == nullptr)
+      return nullptr;
 
-    socket->reset(client);
+    SOCKET descriptor = RawEndAccept(context, result);
+    if (descriptor == INVALID_SOCKET)
+      return nullptr;
 
-    return S_OK;
+    auto accepted = std::make_unique<Wrapper>(descriptor);
+    if (accepted == nullptr)
+      closesocket(descriptor);
+
+    return std::move(accepted);
   }
 
  private:
-  void Reset();
+  SOCKET RawEndAccept(Context* pointer, HRESULT* result);
 
-  HRESULT EndAccept(AsyncContext* context, SOCKET* socket);
+  static void CALLBACK OnRequested(PTP_CALLBACK_INSTANCE callback,
+                                   void* instance, PTP_WORK work);
+  void OnRequested(PTP_WORK work);
 
-  std::unique_ptr<AsyncContext> CreateContext(Listener* listener, HANDLE event);
-  HRESULT DispatchRequest(
-      std::unique_ptr<AsyncContext>&& context);  // NOLINT(build/c++11)
-  void DeleteContext(AsyncContext* context);
+  static void CALLBACK OnCompleted(PTP_CALLBACK_INSTANCE callback,
+                                   void* instance, void* overlapped,
+                                   ULONG error, ULONG_PTR length, PTP_IO io);
+  void OnCompleted(std::unique_ptr<Context>&& context, HRESULT result);
 
-  static void CALLBACK OnRequested(PTP_CALLBACK_INSTANCE instance, void* param);
-  void OnRequested(AsyncContext* context);
+  static PTP_CALLBACK_ENVIRON environment_;
 
-  static void CALLBACK OnCompleted(PTP_CALLBACK_INSTANCE instance, void* param,
-                                   void* overlapped, ULONG error,
-                                   ULONG_PTR length, PTP_IO io);
-  void OnCompleted(AsyncContext* context, HRESULT result, ULONG_PTR length);
-
-  std::list<std::unique_ptr<AsyncContext>> requests_;
-  madoka::concurrent::ConditionVariable empty_;
   madoka::concurrent::CriticalSection lock_;
+  PTP_WORK work_;
+  std::list<std::unique_ptr<Context>> requests_;
   WSAPROTOCOL_INFO protocol_;
-  SOCKET old_descriptor_;
   PTP_IO io_;
 
   MADOKA_DISALLOW_COPY_AND_ASSIGN(AsyncServerSocket);

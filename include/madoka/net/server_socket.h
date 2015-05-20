@@ -12,39 +12,49 @@ namespace net {
 
 class ServerSocket : public AbstractSocket {
  public:
-  ServerSocket() {
+  ServerSocket() : listening_(false) {
   }
 
-  ServerSocket(int family, int type, int protocol) {
+  ServerSocket(int family, int type, int protocol) : ServerSocket() {
     Create(family, type, protocol);
   }
 
   bool Listen(int backlog) {
-    return listen(descriptor_, backlog) == 0;
+    bool succeeded = listen(descriptor_, backlog) == 0;
+    if (succeeded)
+      listening_ = true;
+
+    return succeeded;
   }
 
-  template<class T>
-  std::unique_ptr<T> Accept() {
-    SOCKET peer = Accept();
-    if (peer == INVALID_SOCKET)
-      return nullptr;
+  template<class Impl>
+  std::unique_ptr<Impl> Accept() {
+    struct Wrapper : Impl {
+      explicit Wrapper(SOCKET descriptor) {
+        descriptor_ = descriptor;
+        bound_ = true;
+        connected_ = true;
+      }
+    };
 
-    auto client = new T(peer);
-    if (client == nullptr) {
-      closesocket(peer);
-      return nullptr;
-    }
-
-    return std::unique_ptr<T>(client);
-  }
-
- private:
-  SOCKET Accept() {
     sockaddr_storage address;
     int length = sizeof(address);
-    return accept(descriptor_, reinterpret_cast<sockaddr*>(&address), &length);
+    SOCKET descriptor = accept(descriptor_,
+                               reinterpret_cast<sockaddr*>(&address), &length);
+    if (descriptor == INVALID_SOCKET)
+      return nullptr;
+
+    auto accepted = std::make_unique<Impl>(descriptor);
+    if (accepted == nullptr)
+      closesocket(descriptor);
+
+    return std::move(accepted);
   }
 
+ protected:
+  bool listening_;
+
+ private:
   MADOKA_DISALLOW_COPY_AND_ASSIGN(ServerSocket);
 };
 

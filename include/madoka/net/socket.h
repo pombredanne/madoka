@@ -13,8 +13,17 @@ class Socket : public AbstractSocket {
   Socket() : connected_(false) {
   }
 
-  Socket(int family, int type, int protocol) : connected_(false) {
+  Socket(int family, int type, int protocol) : Socket() {
     Create(family, type, protocol);
+  }
+
+  virtual ~Socket() {
+    Close();
+  }
+
+  void Close() override {
+    AbstractSocket::Close();
+    connected_ = false;
   }
 
   bool Connect(const void* address, int length) {
@@ -27,8 +36,14 @@ class Socket : public AbstractSocket {
   }
 
   bool Connect(const addrinfo* end_point) {
-    if (connected_)
+    if (connected_) {
+#ifdef _WIN32
+      WSASetLastError(WSAEISCONN);
+#else
+      errno = EISCONN;
+#endif
       return false;
+    }
 
     if (!Create(end_point))
       return false;
@@ -38,8 +53,10 @@ class Socket : public AbstractSocket {
 
 #ifdef _WIN32
   bool Connect(const ADDRINFOW* end_point) {
-    if (connected_)
+    if (connected_) {
+      WSASetLastError(WSAEISCONN);
       return false;
+    }
 
     if (!Create(end_point))
       return false;
@@ -48,12 +65,9 @@ class Socket : public AbstractSocket {
   }
 #endif  // _WIN32
 
-  bool Shutdown(int how) {
-    bool succeeded = shutdown(descriptor_, how) == 0;
-    if (succeeded)
-      connected_ = false;
-
-    return succeeded;
+  void Shutdown(int how) {
+    shutdown(descriptor_, how);
+    connected_ = false;
   }
 
   int Receive(void* buffer, int length, int flags) {
@@ -86,24 +100,9 @@ class Socket : public AbstractSocket {
   }
 
  protected:
-  explicit Socket(SOCKET descriptor) {
-    if (descriptor != INVALID_SOCKET) {
-      descriptor_ = descriptor;
-      connected_ = true;
-    } else {
-      connected_ = false;
-    }
-  }
-
-  void set_connected(bool connected) {
-    connected_ = connected;
-  }
-
- private:
-  friend class ServerSocket;
-
   bool connected_;
 
+ private:
   MADOKA_DISALLOW_COPY_AND_ASSIGN(Socket);
 };
 

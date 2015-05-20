@@ -87,11 +87,6 @@ class SocketStream : public Socket, public madoka::io::AbstractStream {
                   AbstractStream::Listener* listener) override;
 
  private:
-  friend class AsyncServerSocket;
-  friend class ServerSocket;
-
-  explicit SocketStream(SOCKET descriptor);
-
   void Reset();
 
   void ConnectAsync(const addrinfo* end_point, const ADDRINFOW* end_pointw,

@@ -30,8 +30,14 @@ class AbstractSocket {
   }
 
   bool Bind(const addrinfo* end_point) {
-    if (bound_)
+    if (bound_) {
+#ifdef _WIN32
+      WSASetLastError(WSAEINVAL);
+#else
+      errno = EINVAL;
+#endif
       return false;
+    }
 
     if (!Create(end_point))
       return false;
@@ -41,8 +47,10 @@ class AbstractSocket {
 
 #ifdef _WIN32
   bool Bind(const ADDRINFOW* end_point) {
-    if (bound_)
+    if (bound_) {
+      WSASetLastError(WSAEINVAL);
       return false;
+    }
 
     if (!Create(end_point))
       return false;
@@ -81,16 +89,16 @@ class AbstractSocket {
     return SetOption(level, option, &value, sizeof(value));
   }
 
+  bool bound() const {
+    return bound_;
+  }
+
   bool IsValid() const {
     return descriptor_ != INVALID_SOCKET;
   }
 
-  operator bool() const {
+  explicit operator bool() const {
     return IsValid();
-  }
-
-  bool bound() const {
-    return bound_;
   }
 
  protected:
@@ -117,10 +125,9 @@ class AbstractSocket {
 #endif  // _WIN32
 
   SOCKET descriptor_;
-
- private:
   bool bound_;
 
+ private:
   MADOKA_DISALLOW_COPY_AND_ASSIGN(AbstractSocket);
 };
 
