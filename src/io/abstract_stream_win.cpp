@@ -64,7 +64,7 @@ bool AbstractStream::IsValidRequest(AsyncContext* context) {
   return false;
 }
 
-void CALLBACK AbstractStream::OnRequested(PTP_CALLBACK_INSTANCE instance,
+void CALLBACK AbstractStream::OnRequested(PTP_CALLBACK_INSTANCE /*callback*/,
                                           void* request) {
   auto context = static_cast<AsyncContext*>(request);
   context->stream->OnRequested(context);

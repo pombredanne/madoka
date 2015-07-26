@@ -183,7 +183,7 @@ SOCKET AsyncServerSocket::RawEndAccept(Context* context, HRESULT* result) {
   return descriptor;
 }
 
-void CALLBACK AsyncServerSocket::OnRequested(PTP_CALLBACK_INSTANCE callback,
+void CALLBACK AsyncServerSocket::OnRequested(PTP_CALLBACK_INSTANCE /*callback*/,
                                              void* instance, PTP_WORK work) {
   static_cast<AsyncServerSocket*>(instance)->OnRequested(work);
 }
@@ -270,10 +270,10 @@ void AsyncServerSocket::OnRequested(PTP_WORK work) {
     OnCompleted(std::move(context), result);
 }
 
-void CALLBACK AsyncServerSocket::OnCompleted(PTP_CALLBACK_INSTANCE callback,
+void CALLBACK AsyncServerSocket::OnCompleted(PTP_CALLBACK_INSTANCE /*callback*/,
                                              void* instance, void* overlapped,
-                                             ULONG error, ULONG_PTR length,
-                                             PTP_IO io) {
+                                             ULONG error, ULONG_PTR /*length*/,
+                                             PTP_IO /*io*/) {
   static_cast<AsyncServerSocket*>(instance)->OnCompleted(
       std::unique_ptr<Context>(
           static_cast<Context*>(

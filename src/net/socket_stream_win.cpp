@@ -708,14 +708,14 @@ void SocketStream::OnRequested(AbstractStream::AsyncContext* abstract_context) {
     OnCompleted(context, result, 0);
 }
 
-void CALLBACK SocketStream::OnCompleted(PTP_CALLBACK_INSTANCE instance,
-                                        void* context, void* overlapped,
+void CALLBACK SocketStream::OnCompleted(PTP_CALLBACK_INSTANCE /*callback*/,
+                                        void* instance, void* overlapped,
                                         ULONG error, ULONG_PTR length,
-                                        PTP_IO io) {
-  auto stream = static_cast<SocketStream*>(context);
-  auto async_context =
+                                        PTP_IO /*io*/) {
+  auto stream = static_cast<SocketStream*>(instance);
+  auto context =
       static_cast<AsyncContext*>(static_cast<OVERLAPPED*>(overlapped));
-  stream->OnCompleted(async_context, __HRESULT_FROM_WIN32(error), length);
+  stream->OnCompleted(context, __HRESULT_FROM_WIN32(error), length);
 }
 
 void SocketStream::OnCompleted(AsyncContext* context, HRESULT result,

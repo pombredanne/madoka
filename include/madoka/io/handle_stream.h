@@ -53,9 +53,9 @@ class HandleStream : public AbstractStream {
   HANDLE handle_;
 
  private:
-  static void CALLBACK OnCompleted(PTP_CALLBACK_INSTANCE instance,
-                                   void* context, void* overlapped, ULONG error,
-                                   ULONG_PTR length, PTP_IO io);
+  static void CALLBACK OnCompleted(PTP_CALLBACK_INSTANCE callback,
+                                   void* instance, void* overlapped,
+                                   ULONG error, ULONG_PTR length, PTP_IO io);
   void OnCompleted(AsyncContext* context, HRESULT result, ULONG_PTR length);
 
   PTP_IO io_;

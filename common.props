@@ -8,8 +8,10 @@
   <ItemDefinitionGroup>
     <ClCompile>
       <PreprocessorDefinitions>MADOKA_IMPLEMENTATION;WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <DisableSpecificWarnings>4127;4244;4267;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <WarningLevel>Level4</WarningLevel>
       <TreatWarningAsError>true</TreatWarningAsError>
-      <DisableSpecificWarnings>4244;4267</DisableSpecificWarnings>
+      <SDLCheck>true</SDLCheck>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup />

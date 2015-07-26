@@ -104,9 +104,9 @@ class SocketStream : public Socket, public madoka::io::AbstractStream {
 
   void OnRequested(AbstractStream::AsyncContext* abstract_context) override;
 
-  static void CALLBACK OnCompleted(PTP_CALLBACK_INSTANCE instance,
-                                   void* context, void* overlapped, ULONG error,
-                                   ULONG_PTR length, PTP_IO io);
+  static void CALLBACK OnCompleted(PTP_CALLBACK_INSTANCE callback,
+                                   void* instance, void* overlapped,
+                                   ULONG error, ULONG_PTR length, PTP_IO io);
   void OnCompleted(AsyncContext* context, HRESULT result, ULONG_PTR length);
 
   PTP_IO io_;

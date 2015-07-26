@@ -39,7 +39,7 @@ class AbstractStream : public Stream {
   madoka::concurrent::CriticalSection lock_;
 
  private:
-  static void CALLBACK OnRequested(PTP_CALLBACK_INSTANCE instance,
+  static void CALLBACK OnRequested(PTP_CALLBACK_INSTANCE callback,
                                    void* request);
   virtual void OnRequested(AsyncContext* context) = 0;
 

@@ -275,14 +275,14 @@ void HandleStream::OnRequested(AbstractStream::AsyncContext* async_context) {
   }
 }
 
-void CALLBACK HandleStream::OnCompleted(PTP_CALLBACK_INSTANCE instance,
-                                        void* context, void* overlapped,
+void CALLBACK HandleStream::OnCompleted(PTP_CALLBACK_INSTANCE /*callback*/,
+                                        void* instance, void* overlapped,
                                         ULONG error, ULONG_PTR length,
-                                        PTP_IO io) {
-  auto stream = static_cast<HandleStream*>(context);
-  auto async_context =
+                                        PTP_IO /*io*/) {
+  auto stream = static_cast<HandleStream*>(instance);
+  auto context =
       static_cast<AsyncContext*>(static_cast<OVERLAPPED*>(overlapped));
-  stream->OnCompleted(async_context, __HRESULT_FROM_WIN32(error), length);
+  stream->OnCompleted(context, __HRESULT_FROM_WIN32(error), length);
 }
 
 void HandleStream::OnCompleted(AsyncContext* context, HRESULT result,

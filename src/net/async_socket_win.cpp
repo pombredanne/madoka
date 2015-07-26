@@ -457,7 +457,7 @@ AsyncSocket::Context* AsyncSocket::BeginRequest(
   return pointer;
 }
 
-void CALLBACK AsyncSocket::OnRequested(PTP_CALLBACK_INSTANCE callback,
+void CALLBACK AsyncSocket::OnRequested(PTP_CALLBACK_INSTANCE /*callback*/,
                                        void* instance, PTP_WORK work) {
   static_cast<AsyncSocket*>(instance)->OnRequested(work);
 }
@@ -504,7 +504,9 @@ void AsyncSocket::OnRequested(PTP_WORK work) {
         }
       }
 
-      sockaddr_storage address = { context->end_point->ai_family };
+      sockaddr_storage address = {
+        static_cast<ADDRESS_FAMILY>(context->end_point->ai_family)
+      };
       if (!Bind(&address, context->end_point->ai_addrlen)) {
         result = HRESULT_FROM_WIN32(WSAGetLastError());
         break;
@@ -591,10 +593,10 @@ void AsyncSocket::OnRequested(PTP_WORK work) {
     OnCompleted(std::move(context), result, 0);
 }
 
-void CALLBACK AsyncSocket::OnCompleted(PTP_CALLBACK_INSTANCE callback,
+void CALLBACK AsyncSocket::OnCompleted(PTP_CALLBACK_INSTANCE /*callback*/,
                                        void* instance, void* overlapped,
                                        ULONG error, ULONG_PTR bytes,
-                                       PTP_IO io) {
+                                       PTP_IO /*io*/) {
   static_cast<AsyncSocket*>(instance)->OnCompleted(
       std::unique_ptr<Context>(
           static_cast<Context*>(
